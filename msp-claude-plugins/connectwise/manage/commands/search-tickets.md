@@ -111,7 +111,7 @@ Found 3 tickets matching criteria
 +----------+----------------------------------+------------------+----------+-------------+
 
 Quick Actions:
-- View ticket: /show-ticket <id>
+- View ticket: /get-ticket <id>
 - Update ticket: /update-ticket <id>
 - Add note: /add-note <id>
 ```
@@ -285,7 +285,7 @@ Results are ordered by:
 ## Related Commands
 
 - `/create-ticket` - Create new ticket
-- `/show-ticket` - View full ticket details
+- `/get-ticket` - View full ticket details
 - `/update-ticket` - Modify ticket
 - `/add-note` - Add note to ticket
 - `/log-time` - Log time against ticket
