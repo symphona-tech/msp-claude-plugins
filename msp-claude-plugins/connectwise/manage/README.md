@@ -135,13 +135,22 @@ curl -s "https://${CW_API_URL}/v4_6_release/apis/3.0/system/info" \
 | `projects` | Project CRUD, phases, templates, resource allocation |
 | `time-entries` | Time entry CRUD, billable/non-billable, work types |
 | `api-patterns` | Authentication, pagination, conditions syntax, rate limiting |
+| `product-catalog` | Catalog items (SKUs), categories, subcategories, manufacturers |
 
 ## Available Commands
 
 | Command | Description |
 |---------|-------------|
-| `/create-ticket` | Create a new service ticket with company lookup and board selection |
-| `/search-tickets` | Search tickets with filters (company, status, priority, date, assignee) |
+| `/add-note` | Add an internal or external note to a ticket |
+| `/check-agreement` | View agreement status and entitlements for a company |
+| `/close-ticket` | Close a ticket with resolution notes |
+| `/create-ticket` | Create a new service ticket |
+| `/get-ticket` | Retrieve detailed ticket information |
+| `/log-time` | Log a time entry against a ticket |
+| `/lookup-config` | Search for configuration items (assets) |
+| `/schedule-entry` | Create a schedule entry or appointment |
+| `/search-tickets` | Search for tickets by various criteria |
+| `/update-ticket` | Update fields on an existing ticket |
 
 ## API Reference
 
