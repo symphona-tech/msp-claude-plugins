@@ -63,8 +63,8 @@ cw_get_ticket  id: 54321
 cw_update_ticket
   id: 54321
   operations: [
-    {"op": "replace", "path": "status/name", "value": "In Progress"},
-    {"op": "replace", "path": "owner/id",    "value": 123}
+    {"op": "replace", "path": "status/id", "value": 2},
+    {"op": "replace", "path": "owner/id",   "value": 123}
   ]
 ```
 
@@ -76,6 +76,9 @@ cw_add_ticket_note
   text:                 "Identified the issue as a DNS configuration problem."
   internalAnalysisFlag: true
 ```
+
+Resolve the status ID with `cw_list_statuses` rather than patching a name —
+`status/id` is the form the tool's own schema documents.
 
 Set `resolutionFlag: true` for resolution notes, and `customerUpdatedFlag: true`
 for notes the customer should see on the portal.
@@ -115,7 +118,9 @@ conditions=resources contains "jsmith" and closedFlag=false
 
 ## Workflow: Ticket Closure with Validation
 
-**There is no close tool.** Closure is composed, and each checkpoint is a
+**There is no close tool, and closure is ordered.** A ticket must pass through
+`Completed` before `Closed`; patching straight to a closed status fails with an
+error whose message reads like a permissions failure. Each checkpoint is a
 separate call:
 
 1. **Verify resolution exists** — `cw_get_ticket` and confirm the `resolution`
@@ -124,10 +129,19 @@ separate call:
 2. **Check time entries** — `cw_search_time_entries` with
    `conditions=chargeToId=54321 and chargeToType="ServiceTicket"`. Ensure all
    work is logged.
-3. **Confirm status is Completed** — tickets must pass through `Completed`
-   before `Closed`. Resolve valid statuses with `cw_list_statuses` for the
-   ticket's board.
-4. **Close the ticket** —
+3. **Resolve the statuses** — `cw_list_statuses` with the ticket's `boardId`.
+   Call it **without** a filter to find `Completed`, and with
+   `conditions=closedStatus=true` to find the closed status. `Completed` is not
+   itself a closed status, so the filtered call will not return it.
+4. **Transition to `Completed`** if the ticket is not already there —
+
+   ```
+   cw_update_ticket
+     id: 54321
+     operations: [{"op": "replace", "path": "status/id", "value": <completed_status_id>}]
+   ```
+
+5. **Close the ticket** —
 
    ```
    cw_update_ticket
@@ -138,14 +152,14 @@ separate call:
      ]
    ```
 
-5. **Validate closure** — `cw_get_ticket` and confirm `closedFlag: true` and
+6. **Validate closure** — `cw_get_ticket` and confirm `closedFlag: true` and
    `closedDate` is populated.
 
 > If any checkpoint fails, stop and resolve the issue before proceeding.
 > Closing without a resolution note leaves the ticket incomplete in reports.
-> These are five separate calls rather than one transaction, so a failure part
-> way through leaves the ticket in whatever state the last successful call put
-> it — report which steps completed.
+> These are separate calls rather than one transaction, so a failure part way
+> through leaves the ticket in whatever state the last successful call put it —
+> report which steps completed.
 
 ## Best Practices
 
