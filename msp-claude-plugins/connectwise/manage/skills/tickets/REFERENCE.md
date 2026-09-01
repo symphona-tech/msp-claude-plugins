@@ -63,27 +63,27 @@ Boards organize tickets by type and workflow. Query available boards: `GET /serv
 | Managed Services | Monitoring alerts | Alert > Triage > Resolution |
 | Sales | Pre-sales engineering | Request > Quote > Won/Lost |
 
-Get board-specific statuses: `GET /service/boards/{boardId}/statuses`
+Get board-specific statuses with `cw_list_statuses`, passing the ticket's `boardId`.
 
 ---
 
 ## Note Types & Flags
 
-### Note Types
+A note's visibility is decided by the flags passed to `cw_add_ticket_note`, not by a type name chosen separately.
 
-| Type | Visibility |
-|------|------------|
-| `Discussion` | Internal only |
-| `Internal` | Internal only |
-| `Resolution` | Can be published to customer |
+> **A note with no flags set is a Discussion note, and a Discussion note is visible to the customer.** Internal-only is not the default and must be requested explicitly with `internalAnalysisFlag: true`. Treat any note whose flags you have not set deliberately as customer-facing.
 
 ### Note Flags
 
-| Flag | Purpose |
-|------|---------|
-| `detailDescriptionFlag` | Appends to ticket description |
-| `internalAnalysisFlag` | Internal note (not visible to customer) |
-| `resolutionFlag` | Resolution note (visible when ticket closed) |
+| Flag | Effect | Customer sees it |
+|------|--------|------------------|
+| *(none set)* | Plain discussion note | **Yes** |
+| `internalAnalysisFlag` | Internal analysis, withheld from the customer | No |
+| `detailDescriptionFlag` | Appends to the ticket description | Yes |
+| `resolutionFlag` | Resolution note, surfaced when the ticket closes | Yes |
+| `customerUpdatedFlag` | Records that the customer was updated | Yes |
+
+The flags are not mutually exclusive; `internalAnalysisFlag` is the only one that withholds text.
 
 ---
 

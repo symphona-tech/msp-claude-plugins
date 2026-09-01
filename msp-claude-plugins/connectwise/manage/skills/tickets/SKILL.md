@@ -83,6 +83,10 @@ Resolve the status ID with `cw_list_statuses` rather than patching a name —
 Set `resolutionFlag: true` for resolution notes, and `customerUpdatedFlag: true`
 for notes the customer should see on the portal.
 
+**Passing no flags does not make a note private.** An unflagged note is a
+discussion note and is visible to the customer; only `internalAnalysisFlag: true`
+withholds it. See [REFERENCE.md](./REFERENCE.md) for the full flag table.
+
 ### Search Tickets
 
 ```

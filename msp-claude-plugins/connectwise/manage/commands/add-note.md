@@ -43,9 +43,14 @@ Add an internal or external note to a ConnectWise ticket.
      customerUpdatedFlag:  <true if flag=external or both>
    ```
 
-   The flags are the whole of the visibility decision, so set them deliberately
-   — `customerUpdatedFlag` is what reaches the customer portal and triggers
+   The flags are the whole of the visibility decision, so set them deliberately.
+   `customerUpdatedFlag` is what reaches the customer portal and triggers
    notification.
+
+   **If `flag` was not supplied, both flags are false and the result is a plain
+   discussion note, which is visible to the customer.** Internal-only is never
+   the default. Resolve `flag` explicitly before calling, and when the operator
+   did not state one, ask rather than assuming internal.
 
 4. **For ticket field updates — patch the ticket**
 
@@ -98,17 +103,22 @@ Appends to the resolution field. Use for documenting how the issue was resolved.
 
 | Flag | `cw_add_ticket_note` arguments | Internal Users | Customer Portal | Email Notifications |
 |------|--------------------------------|----------------|-----------------|---------------------|
+| *(omitted)* | neither flag set | Yes | **Yes** | No |
 | internal | `internalAnalysisFlag: true` | Yes | No | No |
 | external | `customerUpdatedFlag: true` | Yes | Yes | Yes (if configured) |
 | both | both flags true | Yes | Yes | Yes (if configured) |
+
+The first row is the trap: omitting `flag` does not withhold the note. It writes a discussion note the customer can read on the portal, silently and without a notification to signal that it happened.
 
 ## Examples
 
 ### Basic Internal Note
 
 ```
-/add-note 12345 "Contacted customer, issue reproduced on their end"
+/add-note 12345 "Contacted customer, issue reproduced on their end" --flag internal
 ```
+
+`--flag internal` is required for this to stay internal. Without it the note reaches the customer portal.
 
 ### External Note (Customer-Visible)
 
