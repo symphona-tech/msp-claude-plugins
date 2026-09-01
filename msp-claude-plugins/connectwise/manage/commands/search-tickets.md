@@ -138,7 +138,7 @@ Quick Actions:
 ### Detailed View
 
 ```
-/search-tickets --company "Acme" --detailed
+/search-tickets --company "Acme" --limit 2
 ```
 
 ```
@@ -161,8 +161,7 @@ Description:
 Multiple users unable to send or receive email since 9am.
 Affects sales team primarily.
 
-Last Note (10:45):
-"Identified issue with mail flow rules. Working on fix."
+(Notes are a separate read: `cw_get_ticket_notes` per ticket, or `/get-ticket <id>`.)
 ================================================================================
 ```
 

@@ -121,7 +121,7 @@ Update fields on an existing ConnectWise ticket including status, priority, boar
 ### Full Update
 
 ```
-/update-ticket 12345 --status "In Progress" --priority 1 --owner jsmith --board "Escalations" --type "Incident" --summary "Critical: Email outage affecting all users"
+/update-ticket 12345 --status "In Progress" --priority 1 --owner jsmith --board "Escalations" --summary "Critical: Email outage affecting all users"
 ```
 
 ## Output
@@ -240,8 +240,6 @@ Please provide at least one field to update:
   --priority   - Change priority level
   --board      - Move to different board
   --owner      - Reassign ticket
-  --type       - Change ticket type
-  --subtype    - Change ticket subtype
   --summary    - Update ticket summary
 
 Example: /update-ticket 12345 --status "In Progress"

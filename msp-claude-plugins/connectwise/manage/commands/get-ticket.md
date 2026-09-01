@@ -6,7 +6,7 @@ arguments: [ticket_id, include_notes, include_time, include_configs, include_tas
 
 # Get ConnectWise PSA Ticket
 
-Retrieve detailed ticket information including status, notes, time entries, and configuration items.
+Retrieve detailed ticket information including status, notes, and time entries.
 
 ## Prerequisites
 
@@ -66,10 +66,10 @@ Retrieve detailed ticket information including status, notes, time entries, and 
 /get-ticket 12345 --include_time true
 ```
 
-### Full Details
+### Notes and Time
 
 ```
-/get-ticket 12345 --include_time true --include_configs true --include_tasks true
+/get-ticket 12345 --include_notes true --include_time true
 ```
 
 ### Minimal (No Notes)
