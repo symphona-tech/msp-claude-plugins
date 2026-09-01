@@ -10,62 +10,58 @@ Log a time entry against a ConnectWise ticket.
 
 ## Prerequisites
 
-- Valid ConnectWise PSA API credentials configured
-- User must have time entry creation permissions
+- The `connectwise-manage-mcp` server is configured and reachable
+- The server's API member must hold time entry permissions
 - Ticket must exist and be accessible
+
+## Tools used
+
+| Step | Tool |
+|------|------|
+| Validate the ticket | `cw_get_ticket` |
+| Resolve the member | `cw_search_members` |
+| Check agreement coverage | `cw_search_agreements` |
+| Create the entry | `cw_create_time_entry` |
 
 ## Steps
 
 1. **Validate ticket exists**
-   ```http
-   GET /service/tickets/{id}
+   - `cw_get_ticket` with `id=<ticket_id>`
+   - Capture the company ID for the agreement check
+
+2. **Resolve the member**
+   - `cw_search_members` with `conditions=identifier="<member>"`
+   - `memberId` is **required** by `cw_create_time_entry` and is not inferred
+     from the caller — the server authenticates as one API member, which is not
+     necessarily the technician the time belongs to
+
+3. **Calculate time values**
+   - `timeStart` is required; supply `timeEnd` or `actualHours`
+   - Both are ISO 8601
+
+4. **Check agreement coverage (if billable)**
+   - `cw_search_agreements` with
+     `conditions=company/id=<company_id> and cancelledFlag=false`
+   - Warn when the entry would exceed remaining covered hours
+
+5. **Create the time entry**
+
    ```
-   - Confirm ticket is accessible
-   - Get company ID for agreement lookup
-   - Note if ticket is closed (warn user)
-
-2. **Resolve work type (if provided)**
-   ```http
-   GET /time/workTypes?conditions=name='{work_type}'
-   ```
-
-3. **Resolve work role (if provided)**
-   ```http
-   GET /time/workRoles?conditions=name='{work_role}'
-   ```
-
-4. **Calculate time values**
-   - If `actual_hours` provided, calculate `time_end` from `time_start`
-   - If `time_end` provided, calculate `actual_hours` from difference
-   - Validate times are logical (end > start)
-
-5. **Check agreement coverage (if billable)**
-   ```http
-   GET /finance/agreements?conditions=company/id={companyId} and cancelledFlag=false
-   ```
-   - Warn if no active agreement
-   - Show remaining hours if block agreement
-
-6. **Create time entry**
-   ```http
-   POST /time/entries
-   Content-Type: application/json
-
-   {
-     "chargeToId": <ticket_id>,
-     "chargeToType": "ServiceTicket",
-     "member": {"identifier": "<current_user>"},
-     "timeStart": "<time_start>",
-     "timeEnd": "<time_end>",
-     "actualHours": <actual_hours>,
-     "notes": "<notes>",
-     "billableOption": "<billable>",
-     "workType": {"id": <work_type_id>},
-     "workRole": {"id": <work_role_id>}
-   }
+   cw_create_time_entry
+     chargeToType:  "ServiceTicket"
+     chargeToId:    <ticket_id>
+     memberId:      <member_id>
+     timeStart:     "<ISO 8601>"
+     timeEnd:       "<ISO 8601>"
+     notes:         "<work notes>"
+     internalNotes: "<internal notes>"
    ```
 
-7. **Return confirmation with totals**
+   `chargeToType`, `chargeToId`, `memberId` and `timeStart` are all required.
+   **A time entry against a ticket lands on the customer's next invoice** — treat
+   it as a billing action and confirm before creating one.
+
+6. **Return confirmation with totals**
 
 ## Parameters
 
@@ -77,8 +73,8 @@ Log a time entry against a ConnectWise ticket.
 | actual_hours | decimal | No* | - | Hours worked (alternative to time_end) |
 | notes | string | No | - | Work description |
 | billable | string | No | Billable | Billable, DoNotBill, NoCharge |
-| work_type | string | No | - | Work type name |
-| work_role | string | No | - | Work role name |
+| work_type | string | No | - | **Unavailable** — see below |
+| work_role | string | No | - | **Unavailable** — see below |
 
 *Either `time_end` or `actual_hours` is required
 
@@ -102,12 +98,6 @@ Log a time entry against a ConnectWise ticket.
 /log-time 12345 "now" --actual_hours 0.5 --notes "Quick phone support"
 ```
 
-### Specify Work Type and Role
-
-```
-/log-time 12345 "2026-02-04 14:00" --actual_hours 2.0 --work_type "Remote Support" --work_role "Engineer"
-```
-
 ### Non-Billable Time
 
 ```
@@ -123,7 +113,7 @@ Log a time entry against a ConnectWise ticket.
 ### Full Example
 
 ```
-/log-time 12345 "2026-02-04 09:00" "2026-02-04 11:30" --notes "Server migration assistance" --work_type "On-site Support" --work_role "Senior Engineer" --billable Billable
+/log-time 12345 "2026-02-04 09:00" "2026-02-04 11:30" --notes "Server migration assistance" --billable Billable
 ```
 
 ## Output
@@ -182,31 +172,6 @@ Notes:
 "Applied configuration changes and verified resolution."
 ```
 
-## API Authentication
-
-```bash
-# Base64 encode credentials: company+publicKey:privateKey
-AUTH=$(echo -n "${CW_COMPANY}+${CW_PUBLIC_KEY}:${CW_PRIVATE_KEY}" | base64)
-
-# Create time entry
-curl -s -X POST \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/time/entries" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chargeToId": '"${TICKET_ID}"',
-    "chargeToType": "ServiceTicket",
-    "timeStart": "2026-02-04T09:00:00Z",
-    "timeEnd": "2026-02-04T10:30:00Z",
-    "actualHours": 1.5,
-    "notes": "Work description here",
-    "billableOption": "Billable",
-    "workType": {"id": 1},
-    "workRole": {"id": 1}
-  }'
-```
-
 ## Error Handling
 
 ### Ticket Not Found
@@ -259,32 +224,6 @@ Warning: Time entry is in the future
 Start: 2026-02-05 09:00 (tomorrow)
 
 Log future time entry? [Y/n]
-```
-
-### Invalid Work Type
-
-```
-Error: Work type not found: "Invalid Type"
-
-Available work types:
-- Remote Support (ID: 1)
-- On-site Support (ID: 2)
-- Phone Support (ID: 3)
-- Project Work (ID: 4)
-
-Example: /log-time 12345 "now" --actual_hours 1 --work_type "Remote Support"
-```
-
-### Invalid Work Role
-
-```
-Error: Work role not found: "Invalid Role"
-
-Available work roles:
-- Engineer (ID: 1)
-- Senior Engineer (ID: 2)
-- Technician (ID: 3)
-- Consultant (ID: 4)
 ```
 
 ### Invalid Billable Option
@@ -360,9 +299,20 @@ Adjust start time to 10:30? [a]
 Cancel? [c]
 ```
 
-## Related Commands
+## Not available through the tool surface
 
-- `/get-ticket` - View ticket details and existing time entries
-- `/close-ticket` - Close ticket with final time entry
-- `/update-ticket` - Update ticket fields
-- `/add-note` - Add note to ticket
+| Requested | Would need |
+|-----------|------------|
+| `work_type` — resolve a work type by name | A work type tool |
+| `work_role` — resolve a work role by name | A work role tool |
+
+Neither can be resolved by name, and `cw_create_time_entry`'s `workTypeId` and
+`workRoleId` therefore have no lookup behind them. When the caller names one,
+**say it cannot be resolved and create the entry without it**, letting the
+agreement and board defaults apply — rather than guessing an ID.
+
+This matters more than the other gaps in this plugin: the work role is what
+sets the **billing rate**. A guessed `workRoleId` bills the customer at the
+wrong rate, and nothing downstream would flag it.
+
+## Related Commands

@@ -10,41 +10,39 @@ Search for configuration items (assets) by name, serial number, tag number, or c
 
 ## Prerequisites
 
-- Valid ConnectWise PSA API credentials configured
-- User must have configuration item read permissions
+- The `connectwise-manage-mcp` server is configured and reachable
+- The server's API member must hold configuration read permissions
+
+## Tools used
+
+| Step | Tool |
+|------|------|
+| Resolve company | `cw_search_companies` |
+| Search configurations | `cw_search_configurations` |
+| Read one configuration | `cw_get_configuration` |
 
 ## Steps
 
-1. **Build search conditions**
+1. **Resolve the company (if named)**
+   - `cw_search_companies` with `conditions=name contains "<company>"`
 
-   If query provided, search multiple fields:
-   ```
-   conditions=name contains '{query}' or serialNumber='{query}' or tagNumber='{query}'
-   ```
+2. **Build the conditions string**
+   - Combine the caller's filters into ConnectWise conditions syntax
+   - Type and status filter **by name**, not by resolved ID — see below
 
-   If company_id provided:
-   ```
-   conditions=company/id={company_id}
-   ```
+3. **Execute the search**
 
-2. **Resolve type filter (if provided)**
-   ```http
-   GET /company/configurations/types?conditions=name='{type}'
    ```
-
-3. **Resolve status filter (if provided)**
-   ```http
-   GET /company/configurations/statuses?conditions=name='{status}'
+   cw_search_configurations
+     conditions: "company/id=12345 and status/name=\"Active\""
+     orderBy:    "name asc"
+     pageSize:   <limit>
    ```
 
-4. **Execute search**
-   ```http
-   GET /company/configurations?conditions=<conditions>&page=1&pageSize=<limit>&orderBy=name asc
-   ```
+4. **Read one configuration in full (if a single result)**
+   - `cw_get_configuration` with `id=<configuration_id>`
 
 5. **Format and return results**
-   - Display configuration list with key details
-   - Include quick actions for each item
 
 ## Parameters
 
@@ -82,12 +80,6 @@ Search for configuration items (assets) by name, serial number, tag number, or c
 
 ```
 /lookup-config --company_id 12345
-```
-
-### Filter by Type
-
-```
-/lookup-config --company_id 12345 --type "Server"
 ```
 
 ### Active Configurations Only
@@ -186,34 +178,6 @@ Last Updated:   2026-02-01
 ================================================================================
 ```
 
-## API Authentication
-
-```bash
-# Base64 encode credentials: company+publicKey:privateKey
-AUTH=$(echo -n "${CW_COMPANY}+${CW_PUBLIC_KEY}:${CW_PRIVATE_KEY}" | base64)
-
-# Search by name
-curl -s -X GET \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/company/configurations?conditions=name%20contains%20'ACME'&pageSize=25" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json"
-
-# Search by serial number
-curl -s -X GET \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/company/configurations?conditions=serialNumber='SN123456789'" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json"
-
-# Filter by company and type
-curl -s -X GET \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/company/configurations?conditions=company/id=12345%20and%20type/id=5" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json"
-```
-
 ## Error Handling
 
 ### No Results
@@ -243,41 +207,6 @@ Please provide a query or company_id:
 
 You can also filter by type and status:
   /lookup-config --company_id 12345 --type "Server" --status "Active"
-```
-
-### Invalid Configuration Type
-
-```
-Error: Configuration type not found: "InvalidType"
-
-Available types:
-- Workstation
-- Server
-- Server - Windows
-- Server - Linux
-- Firewall
-- Switch
-- Router
-- Printer
-- Mobile Device
-- Virtual Machine
-
-Example: /lookup-config --type "Server"
-```
-
-### Invalid Configuration Status
-
-```
-Error: Configuration status not found: "Disabled"
-
-Available statuses:
-- Active
-- Inactive
-- Retired
-- In Stock
-- Pending
-
-Example: /lookup-config --status "Active"
 ```
 
 ### Company Not Found
@@ -319,6 +248,23 @@ Error: Permission denied
 You do not have permission to view configuration items.
 Contact your ConnectWise administrator.
 ```
+
+## Not available through the tool surface
+
+| Requested | Would need |
+|-----------|------------|
+| Validating a `--type` against the configured list | A configuration type tool |
+| Validating a `--status` against the configured list | A configuration status tool |
+
+Neither list can be enumerated, so a name the caller supplies **cannot be
+checked before it is used**. Filter on it directly in the conditions string —
+`type/name="Server"` — and report an empty result as *no match for that filter*
+rather than as *no configurations exist*. The two readings are different, and
+without the lists this command cannot tell them apart.
+
+The reference tables below are **retained as domain knowledge, not as a
+validated list**: they record what these values typically look like in a
+ConnectWise instance, and any given instance may differ.
 
 ## Filter Reference
 
