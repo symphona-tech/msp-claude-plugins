@@ -30,8 +30,13 @@ View agreement status, covered products, and remaining hours/incidents for a com
 2. **Retrieve agreements**
    - By ID: `cw_get_agreement` with `id=<agreement_id>`
    - By company: `cw_search_agreements` with
-     `conditions=company/id=<company_id> and cancelledFlag=false`
-   - Drop the `cancelledFlag` clause when the caller asked to include expired
+     `conditions=company/id=<company_id> and cancelledFlag=false and (endDate >= [<today>] or endDate = null)`
+   - **`cancelledFlag=false` alone is not "active".** A non-cancelled agreement
+     whose `endDate` has passed is expired, and reporting it as active
+     overstates coverage. An open-ended agreement has a null `endDate`, so both
+     clauses are needed.
+   - When the caller asked to include expired, drop only the date clauses and
+     keep `cancelledFlag=false`; label each result with its `endDate`
 
 3. **Retrieve agreement additions (if include_additions=true)**
    - `cw_get_agreement_additions` with `agreementId=<agreement_id>`
@@ -332,6 +337,12 @@ frequently turns on the work role, and an agreement summary that silently omits
 role coverage invites the reader to conclude that covered hours are the whole
 answer. Say the role coverage is unavailable whenever billing coverage is the
 question being asked.
+
+**Recent usage is available but is not free.** The usage table in the sample
+output does not come from any agreement tool — it requires a separate
+`cw_search_time_entries` call filtered to the company's tickets. Either make
+that call explicitly or omit the section; do not present an agreement response
+as though it carried usage.
 
 ## Output Includes
 
