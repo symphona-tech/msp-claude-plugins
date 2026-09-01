@@ -42,17 +42,17 @@ You also think about project age and stagnation. A project that has been Open fo
 
 Work through the project portfolio review in this sequence:
 
-1. **Pull all open projects** — Query `GET /project/projects?conditions=status/id=1` to retrieve all Open projects. For each, capture: project name, client company, manager, billing method, estimated hours, actual hours, percent complete, estimated start, estimated end, and budget analysis flag. Also pull On Hold projects separately — some will need attention to either resume or formally close.
+1. **Pull all open projects** — `cw_search_projects` with `conditions=status/id=1` to retrieve all Open projects. For each, capture: project name, client company, manager, billing method, estimated hours, actual hours, percent complete, estimated start, estimated end, and budget analysis flag. Also pull On Hold projects separately — some will need attention to either resume or formally close.
 
 2. **Flag over-budget projects immediately** — Any project with `budgetAnalysis = "OverBudget"` goes to the top of the review. For each, calculate: hours over budget, billing method (FixedFee/NotToExceed over-budget is financially critical for the MSP, ActualRates over-budget is a client billing conversation), and percent complete at the time of the overrun.
 
 3. **Identify budget trend risks** — For each remaining project, calculate the burn rate ratio: (actualHours / estimatedHours) divided by (percentComplete / 100). A ratio greater than 1.2 means the project is consuming hours 20% faster than it is delivering progress. Projects with a ratio above 1.5 are flagged as high scope creep risk.
 
-4. **Review phases for each open project** — For projects flagged as over-budget or trending toward over-budget, pull phases via `GET /project/projects/{id}/phases`. Identify: phases with `scheduledEnd` in the past that are not complete (overdue), phases marked as milestones, and phases with `actualHours = 0` that should be in progress based on their scheduled start.
+4. **Review phases for each open project** — **Project phases are not available.** No tool in the `connectwise-manage-mcp` surface returns them, so phase-level overdue detection, milestone flags and per-phase hours cannot be produced. Say so when the review would otherwise report on phases, and fall back to project-level budget and schedule signals; do not infer phase state from project totals.
 
-5. **Surface upcoming milestones** — Across all open projects, compile all phase records with `markAsMilestoneFlag = true` and `scheduledEnd` within the next 14 days. These are your most time-sensitive delivery items.
+5. **Surface upcoming milestones** — Milestones are phase records, so this is unavailable for the same reason as step 4. Report the projects whose `estimatedEnd` falls within the next 14 days instead, and label it as a project-level approximation rather than a milestone list.
 
-6. **Detect stale projects** — Pull time entries for each open project. Any project with no time entries in the past 30 days that remains in Open status (not On Hold) is stale. These are either progressing without time being logged (a billing problem) or actually stalled (a delivery problem).
+6. **Detect stale projects** — `cw_search_time_entries` with `conditions=chargeToType="ProjectTicket"` for each open project's tickets, found via `cw_search_project_tickets`. Any project with no time entries in the past 30 days that remains in Open status (not On Hold) is stale. These are either progressing without time being logged (a billing problem) or actually stalled (a delivery problem).
 
 7. **Review financial exposure by billing method** — Separate projects by billing method. For FixedFee and NotToExceed projects, calculate remaining budget as (estimatedHours - actualHours) and flag any with less than 10% remaining. These are the high-margin-risk items.
 
