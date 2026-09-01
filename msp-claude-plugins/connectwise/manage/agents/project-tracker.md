@@ -40,7 +40,7 @@ You also think about project age and stagnation. A project that has been Open fo
 
 Work through the project portfolio review in this sequence:
 
-1. **Pull all open projects** — `cw_search_projects` with `conditions=status/id=1` to retrieve all Open projects. For each, capture: project name, client company, manager, billing method, estimated hours, actual hours, percent complete, estimated start, estimated end, and budget analysis flag. Also pull On Hold projects separately — some will need attention to either resume or formally close.
+1. **Pull all open projects** — `cw_search_projects` filtering on the open status, e.g. `conditions=status/name="Open"`. **Project statuses are per-tenant configuration and no tool enumerates them**, so do not hardcode a status id; confirm the name this instance uses and say so if it cannot be established. For each, capture: project name, client company, manager, billing method, estimated hours, actual hours, percent complete, estimated start, estimated end, and budget analysis flag. Also pull On Hold projects separately — some will need attention to either resume or formally close.
 
 2. **Flag over-budget projects immediately** — Any project with `budgetAnalysis = "OverBudget"` goes to the top of the review. For each, calculate: hours over budget, billing method (FixedFee/NotToExceed over-budget is financially critical for the MSP, ActualRates over-budget is a client billing conversation), and percent complete at the time of the overrun.
 
@@ -48,7 +48,7 @@ Work through the project portfolio review in this sequence:
 
 4. **Review phases for each open project** — **Project phases are not available.** No tool in the `connectwise-manage-mcp` surface returns them, so phase-level overdue detection, milestone flags and per-phase hours cannot be produced. Say so when the review would otherwise report on phases, and fall back to project-level budget and schedule signals; do not infer phase state from project totals.
 
-5. **Surface upcoming milestones** — Milestones are phase records, so this is unavailable for the same reason as step 4. Report the projects whose `estimatedEnd` falls within the next 14 days instead, and label it as a project-level approximation rather than a milestone list.
+5. **Report projects ending soon** — milestones proper are phase records, so they are unavailable for the same reason as step 4. Report the projects whose `estimatedEnd` falls within the next 14 days instead, and label it as a project-level approximation rather than a milestone list.
 
 6. **Detect stale projects** — `cw_search_time_entries` with `conditions=chargeToType="ProjectTicket"` for each open project's tickets, found via `cw_search_project_tickets`. Any project with no time entries in the past 30 days that remains in Open status (not On Hold) is stale. These are either progressing without time being logged (a billing problem) or actually stalled (a delivery problem).
 
