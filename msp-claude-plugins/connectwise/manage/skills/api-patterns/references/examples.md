@@ -44,15 +44,25 @@ will throttle everyone else's calls mid-task.
 
 ## Rate limiting and retries
 
-Retry handling lives in the server, not in the caller. A `cw_*` tool that
-returns an error has already exhausted whatever retry policy the server
-applies, so **treat a failure as final** rather than looping on it.
+**The server does not retry.** The pinned `connectwise-manage-mcp` client issues
+a single `fetch` and throws on any non-2xx response, 429 included — there is no
+backoff, no `Retry-After` handling, and no retry loop anywhere in it. A rate-limit
+error therefore surfaces to the caller as a failed tool call.
 
-What a caller should do instead:
+So retry is the **caller's** responsibility, and the caller is an agent rather
+than a request loop:
 
-- Narrow the query and try once more, if the failure was a timeout on a wide sweep
-- Report the failure and stop, if it was a permission or validation error
-- Never fall back to another route to ConnectWise — there is none
+- On a rate-limit failure, **wait before retrying** — the vendor's message names
+  a delay, and the documented limit is 60 requests per minute against the API
+  member the server authenticates as. That budget is shared by every concurrent
+  caller, so a wide sweep by one agent throttles everyone else mid-task.
+- **Narrow the query rather than repeating it.** A retry of the same wide sweep
+  reproduces the condition that caused the failure.
+- On a permission or validation error, **stop**. Retrying will not change it.
+- **Never fall back to another route to ConnectWise — there is none.**
+
+Prefer avoiding the limit to recovering from it: a narrower `conditions` and a
+smaller `pageSize` cost less than a backoff.
 
 ## Reading a write result
 

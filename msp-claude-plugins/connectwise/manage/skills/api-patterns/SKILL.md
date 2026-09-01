@@ -232,13 +232,14 @@ When rate limited, you receive HTTP 429:
 }
 ```
 
-Implement exponential backoff with jitter on 429s using the `Retry-After`
-header. See [references/examples.md](references/examples.md) for a retry
-strategy implementation.
+**The MCP server does not retry.** It issues one request and surfaces any
+non-2xx response — 429 included — as a failed tool call, so backing off is the
+caller's job. See [references/examples.md](references/examples.md) for what a
+caller should do instead.
 
 ### Best Practices for Rate Limits
 
-1. **Implement exponential backoff** - Don't hammer the API
+1. **Back off after a 429, and narrow the query** - the server will not do it for you
 2. **Check headers** - Monitor remaining requests
 3. **Batch operations** - Reduce total requests
 4. **Use webhooks** - Instead of polling for changes
