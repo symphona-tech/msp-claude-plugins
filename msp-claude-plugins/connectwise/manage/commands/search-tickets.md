@@ -10,24 +10,43 @@ Search and filter tickets in ConnectWise PSA using various criteria.
 
 ## Prerequisites
 
-- Valid ConnectWise PSA API credentials configured
-- User must have ticket read permissions
+- The `connectwise-manage-mcp` server is configured and reachable
+- The server's API member must hold ticket read permissions
+
+## Tools used
+
+| Step | Tool |
+|------|------|
+| Resolve company | `cw_search_companies` |
+| Resolve board | `cw_list_boards` |
+| Resolve assignee | `cw_search_members` |
+| Execute the search | `cw_search_tickets` |
 
 ## Steps
 
-1. **Build search conditions**
-   - Parse all provided arguments
-   - Resolve names to IDs (company, board, assignee)
-   - Map status/priority text to appropriate conditions
+1. **Resolve names to IDs**
+   - `cw_search_companies`, `cw_list_boards` and `cw_search_members` for any
+     name the caller supplied instead of an ID
+   - Map status and priority text to conditions using the tables below
 
-2. **Construct API query**
-   ```http
-   GET /service/tickets?conditions=<conditions>&page=1&pageSize=<limit>&orderBy=priority/id asc, dateEntered desc
+2. **Build the conditions string**
+
+   `cw_search_tickets` takes ConnectWise conditions syntax directly, so the
+   query is composed rather than URL-built:
+
+   ```
+   cw_search_tickets
+     conditions: "company/id=12345 and closedFlag=false"
+     orderBy:    "priority/id asc, dateEntered desc"
+     pageSize:   <limit>
    ```
 
-3. **Execute search**
-   - Handle pagination if needed
-   - Include related fields (company, contact, status)
+   Every argument is optional. With no `conditions` the server returns the
+   default page, so always pass a filter unless the caller asked for everything.
+
+3. **Page through results if needed**
+   - `page` and `pageSize` are tool arguments; `pageSize` maxes at 1000
+   - Request another page only when the caller asked for more than one returned
 
 4. **Format and return results**
    - Display ticket list with key details
@@ -166,8 +185,8 @@ Last Note (10:45):
 | Text | Priority ID | Condition |
 |------|-------------|-----------|
 | critical | 1 | `priority/id=1` |
-| high | 2 | `priority/id=2` |
 | medium | 3 | `priority/id=3` |
+| high | 2 | `priority/id=2` |
 | low | 4 | `priority/id=4` |
 
 ### Date Formats
@@ -175,34 +194,36 @@ Last Note (10:45):
 - `YYYY-MM-DD` - Date only (2024-02-15)
 - `YYYY-MM-DDTHH:MM:SS` - Date and time (2024-02-15T09:00:00)
 
-## Generated API Conditions
+## Conditions Examples
 
-### Example Condition Strings
+These are the strings passed as the `conditions` argument.
 
 **Open tickets for company:**
 ```
-conditions=company/id=12345 and closedFlag=false
+company/id=12345 and closedFlag=false
 ```
 
 **High priority open tickets:**
 ```
-conditions=priority/id<=2 and closedFlag=false
+priority/id<=2 and closedFlag=false
 ```
 
 **Text search:**
 ```
-conditions=summary contains "email" and closedFlag=false
+summary contains "email" and closedFlag=false
 ```
 
 **Date range:**
 ```
-conditions=dateEntered>=[2024-02-01] and dateEntered<[2024-02-15]
+dateEntered>=[2024-02-01] and dateEntered<[2024-02-15]
 ```
 
 **Assigned to specific member:**
 ```
-conditions=resources contains "jsmith" and closedFlag=false
+resources contains "jsmith" and closedFlag=false
 ```
+
+See the `connectwise-psa-api-patterns` skill for the full conditions grammar.
 
 ## Error Handling
 
@@ -255,32 +276,13 @@ Found 1,247 tickets matching criteria (showing first 25)
 Use --limit to increase results or add filters to narrow search.
 ```
 
-## API Query Details
+## Ordering and Fields
 
-### Default Query
+`orderBy` takes the same syntax as the API: `priority/id asc, dateEntered desc`
+puts critical first and newest first within a priority.
 
-```http
-GET /service/tickets?conditions=closedFlag=false&page=1&pageSize=25&orderBy=priority/id asc,dateEntered desc&fields=id,summary,company/name,status/name,priority/name,dateEntered,resources
-```
-
-### Ordering
-
-Results are ordered by:
-1. Priority (ascending - critical first)
-2. Date entered (descending - newest first)
-
-### Fields Retrieved
-
-- `id` - Ticket ID
-- `summary` - Ticket summary
-- `company/name` - Company name
-- `status/name` - Status name
-- `priority/name` - Priority name
-- `dateEntered` - Creation date
-- `resources` - Assigned member
-- `board/name` - Board name
-- `contact/name` - Contact name
-- `_info/lastUpdated` - Last update time
+Field selection is **not** a `cw_search_tickets` argument — the tool returns the
+server's default projection. Filter the result rather than asking for a subset.
 
 ## Related Commands
 
