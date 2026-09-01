@@ -10,67 +10,74 @@ Close a ConnectWise ticket with resolution notes and optional time entry.
 
 ## Prerequisites
 
-- Valid ConnectWise PSA API credentials configured
-- User must have ticket update permissions
+- The `connectwise-manage-mcp` server is configured and reachable
+- The server's API member must hold ticket update permissions
 - Ticket must exist and be accessible
 - A valid closed status must exist on the ticket's board
+
+## Tools used
+
+**There is no close tool.** Closure is composed from four:
+
+| Step | Tool |
+|------|------|
+| Read current state | `cw_get_ticket` |
+| Resolve a closed status | `cw_list_statuses` |
+| Add the resolution note | `cw_add_ticket_note` |
+| Log final time (optional) | `cw_create_time_entry` |
+| Set the status | `cw_update_ticket` |
+
+Closing is not a bookkeeping change: it stops the SLA clock and fires whatever
+close notification and satisfaction survey the board is wired to. Confirm with
+the operator before the `cw_update_ticket` step.
 
 ## Steps
 
 1. **Validate ticket exists and get current state**
-   ```http
-   GET /service/tickets/{id}
-   ```
-   - Confirm ticket is accessible
-   - Get current board ID for status lookup
+   - `cw_get_ticket` with `id=<ticket_id>`
+   - Get the current board ID for the status lookup
    - Check if ticket is already closed
 
 2. **Resolve closed status**
-   ```http
-   GET /service/boards/{boardId}/statuses?conditions=closedStatus=true
-   ```
-   - If status parameter provided, validate it's a closed status
-   - Otherwise, use board's default closed status
+   - `cw_list_statuses` with `boardId=<board_id>` and `conditions=closedStatus=true`
+   - If a status parameter was provided, confirm it appears in that result
+   - Otherwise use the board's default closed status
 
 3. **Add resolution note**
-   ```http
-   POST /service/tickets/{id}/notes
-   Content-Type: application/json
 
-   {
-     "text": "<resolution>",
-     "resolutionFlag": true,
-     "internalAnalysisFlag": false,
-     "customerUpdatedFlag": true,
-     "processNotifications": true
-   }
+   ```
+   cw_add_ticket_note
+     id:                  <ticket_id>
+     text:                "<resolution>"
+     resolutionFlag:      true
+     customerUpdatedFlag: true
    ```
 
 4. **Log time entry (if time_minutes provided)**
-   ```http
-   POST /time/entries
-   Content-Type: application/json
 
-   {
-     "chargeToId": <ticket_id>,
-     "chargeToType": "ServiceTicket",
-     "timeStart": "<current_datetime>",
-     "timeEnd": "<current_datetime + time_minutes>",
-     "actualHours": <time_minutes / 60>,
-     "notes": "<time_notes or resolution>",
-     "billableOption": "<Billable or DoNotBill>"
-   }
+   ```
+   cw_create_time_entry
+     chargeToType: "ServiceTicket"
+     chargeToId:   <ticket_id>
+     memberId:     <member_id>
+     timeStart:    "<ISO 8601 start>"
+     timeEnd:      "<ISO 8601 end>"
+     notes:        "<time_notes or resolution>"
    ```
 
-5. **Update ticket status to closed**
-   ```http
-   PATCH /service/tickets/{id}
-   Content-Type: application/json
+   `chargeToType`, `chargeToId`, `memberId` and `timeStart` are all required.
+   Resolve the member with `cw_search_members` if the caller did not supply one
+   — the tool will not infer it.
 
-   [
-     {"op": "replace", "path": "/status/id", "value": <closed_status_id>},
-     {"op": "replace", "path": "/resolution", "value": "<resolution>"}
-   ]
+5. **Update ticket status to closed**
+
+   ```
+   cw_update_ticket
+     id:         <ticket_id>
+     operations: [
+       {"op": "replace", "path": "status/id",  "value": <closed_status_id>},
+       {"op": "replace", "path": "resolution", "value": "<resolution>"}
+     ]
    ```
 
 6. **Return closure confirmation**
@@ -175,53 +182,6 @@ Time Summary:
 URL: https://na.myconnectwise.net/v4_6_release/services/system_io/Service/fv_sr100_request.rails?service_recid=12345
 ```
 
-## API Authentication
-
-```bash
-# Base64 encode credentials: company+publicKey:privateKey
-AUTH=$(echo -n "${CW_COMPANY}+${CW_PUBLIC_KEY}:${CW_PRIVATE_KEY}" | base64)
-
-# Add resolution note
-curl -s -X POST \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/service/tickets/${TICKET_ID}/notes" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Resolution notes here",
-    "resolutionFlag": true,
-    "customerUpdatedFlag": true,
-    "processNotifications": true
-  }'
-
-# Log time entry
-curl -s -X POST \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/time/entries" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chargeToId": '"${TICKET_ID}"',
-    "chargeToType": "ServiceTicket",
-    "timeStart": "2026-02-04T15:00:00Z",
-    "timeEnd": "2026-02-04T15:30:00Z",
-    "actualHours": 0.5,
-    "notes": "Final work notes",
-    "billableOption": "Billable"
-  }'
-
-# Update status to closed
-curl -s -X PATCH \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/service/tickets/${TICKET_ID}" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json" \
-  -d '[
-    {"op": "replace", "path": "/status/id", "value": 5},
-    {"op": "replace", "path": "/resolution", "value": "Resolution notes here"}
-  ]'
-```
-
 ## Error Handling
 
 ### Ticket Not Found
@@ -308,7 +268,7 @@ Cancel? [c]
 ```
 Error: Permission denied
 
-You do not have permission to close tickets on the "Escalations" board.
+The API member does not have permission to close tickets on the "Escalations" board.
 Contact your ConnectWise administrator.
 ```
 
@@ -323,6 +283,13 @@ SLA Breach:          2 hours 30 minutes
 
 Proceed with closure? [Y/n]
 ```
+
+### Partial Failure
+
+Closure is four tool calls, not one transaction. If `cw_update_ticket` fails
+after the note and the time entry landed, **say exactly which steps completed**
+— the ticket is open with a resolution note attached, and a retry that repeats
+every step would double-log the time.
 
 ## Related Commands
 
