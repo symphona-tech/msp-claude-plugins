@@ -24,11 +24,24 @@ Time entries in ConnectWise PSA track time spent on tickets, projects, and other
 - **Project time** — project hours charge to a `ProjectTicket`, so the
   ticket has to be located first; use `connectwise-psa-projects`.
 
-## API Endpoint
+## Tool surface
+
+Time entries are reached through `connectwise-manage-mcp`, never by direct
+REST. The endpoint below is named for orientation only.
 
 ```
 Base: /time/entries
 ```
+
+| Tool | Purpose |
+|------|---------|
+| `cw_search_time_entries` | Search with CW conditions syntax |
+| `cw_get_time_entry` | Fetch one entry by ID |
+| `cw_create_time_entry` | Create an entry |
+
+**There is no update tool and no delete tool for time entries**, and no way to
+set the billing option — see
+[Not available through the tool surface](#not-available-through-the-tool-surface).
 
 ## Time Entry Types
 
@@ -94,70 +107,47 @@ Precedence order, first match wins:
 
 ## Common Workflows
 
+### Find time on a ticket
+
+```
+cw_search_time_entries
+  conditions: "chargeToId=54321 and chargeToType=\"ServiceTicket\""
+```
+
+`chargeToType` is one of `ServiceTicket`, `ProjectTicket`, `ChargeCode` or
+`Activity`. This is a search across all entries filtered to the target, not a
+ticket sub-resource, so it pages independently.
+
 ### Log time against a ticket
 
-```http
-POST /time/entries
-Content-Type: application/json
-
-{
-  "chargeToId": 54321,
-  "chargeToType": "ServiceTicket",
-  "member": {"id": 123},
-  "timeStart": "2024-02-15T09:00:00Z",
-  "timeEnd": "2024-02-15T10:30:00Z",
-  "workType": {"id": 1},
-  "workRole": {"id": 2},
-  "billableOption": "Billable",
-  "notes": "Diagnosed email delivery issue. Identified blocked sender.",
-  "addToDetailDescriptionFlag": true
-}
+```
+cw_create_time_entry
+  chargeToType: "ServiceTicket"
+  chargeToId:   54321
+  memberId:     217
+  timeStart:    "2026-02-04T09:00:00Z"
+  timeEnd:      "2026-02-04T11:30:00Z"
+  notes:        "Remote support session"
 ```
 
-`actualHours` can be used instead of `timeStart`/`timeEnd`. Logging against
-a `ChargeCode` requires the `company` field explicitly, since there's no
-ticket to infer it from. See [references/api.md](references/api.md) for
-the actual-hours and charge-code variants plus get/update/delete/search
-examples.
+`chargeToType`, `chargeToId`, `memberId` and `timeStart` are all **required**.
+`memberId` is not inferred — the server authenticates as one API member, which
+is not the technician the time belongs to, so resolve it with
+`cw_search_members` and never default to the service account.
 
-### Approval workflow
+**A time entry against a ticket lands on the customer's next invoice.** Treat
+creating one as a billing action.
 
-1. Time entry created — `Open`
-2. Time sheet submitted — `Submitted`
-3. Manager approves or rejects — `Approved` or `Rejected` (with `internalNotes` explaining what to fix)
-4. Approved time is invoiced — `Billed`
+## Reading time back
 
-Approve/reject and bulk-approval requests, plus time sheet get/submit
-requests, are in [references/api.md](references/api.md).
-
-## API Patterns
-
-Common query conditions for time entries:
-
-**Time entries for a ticket:**
 ```
-conditions=chargeToId=54321 and chargeToType="ServiceTicket"
+cw_search_time_entries  conditions: "member/identifier=\"jtech\" and timeStart>=[2026-02-01]"
+cw_get_time_entry       id: 11223
 ```
 
-**Time entries by member:**
-```
-conditions=member/id=123
-```
-
-**Time entries by date range:**
-```
-conditions=timeStart>=[2024-02-01] and timeStart<[2024-03-01]
-```
-
-**Unbilled time entries:**
-```
-conditions=status="Open" and billableOption="Billable"
-```
-
-**Approved time waiting for billing:**
-```
-conditions=status="Approved" and billableOption="Billable"
-```
+A returned entry carries `billableOption`, `actualHours`, `hoursBilled`,
+`workType`, `workRole` and the agreement fields — so billing treatment is
+**readable** even though it cannot be set.
 
 ## Charge Codes
 
@@ -190,8 +180,28 @@ Charge codes are used for non-ticket time (meetings, training, etc.). Query
 
 See [references/errors.md](references/errors.md) for the complete error reference.
 
-## Related Skills
+## Not available through the tool surface
 
-- [ConnectWise Tickets](../tickets/SKILL.md) - Service tickets
-- [ConnectWise Projects](../projects/SKILL.md) - Project management
-- [ConnectWise API Patterns](../api-patterns/SKILL.md) - Query syntax and auth
+| Operation | Would need |
+|-----------|------------|
+| Setting the billing option on a new entry | A billing argument on `cw_create_time_entry` |
+| Updating a time entry | An update tool. **None exists** |
+| Deleting a time entry | A delete tool. **None exists** |
+| Resolving a work type or work role by name | A work type or work role tool |
+| Approval workflow | An approval tool |
+| Looking up charge codes | A charge-code tool |
+
+**The billing gap is the one that costs money.** `cw_create_time_entry` takes no
+billing argument, so an entry created here receives the server's default
+treatment — billable, in most configurations. The Billing Options section above
+documents what the values mean when **reading** an entry; none of them can be
+set. If work must not be billed, do not create the entry here.
+
+**And it cannot be corrected afterwards.** With no update and no delete tool, a
+wrong entry is a manual fix in the PSA — and once the owning time sheet is
+submitted, a fix by someone with approval rights. Get it right the first time.
+
+The work type and work role gaps compound this: the work role sets the billing
+**rate**, and it cannot be resolved by name either.
+
+## Related Skills
