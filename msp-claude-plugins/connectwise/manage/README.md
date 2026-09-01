@@ -106,18 +106,15 @@ CONNECTWISE_MANAGE_MCP_URL=https://your-gateway-domain/v1/connectwise-manage/mcp
 
 ### Testing Your Connection
 
-Once configured in Claude Code settings, test the connection (env vars injected by Claude Code):
+Call the server's own diagnostic tool:
 
-```bash
-# Build authorization header (Base64 of company+publicKey:privateKey)
-AUTH=$(echo -n "${CW_COMPANY_ID}+${CW_PUBLIC_KEY}:${CW_PRIVATE_KEY}" | base64)
-
-# Test connection
-curl -s "https://${CW_API_URL}/v4_6_release/apis/3.0/system/info" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json" | jq
 ```
+cw_test_connection
+```
+
+It reports whether the server reached ConnectWise PSA with the credentials it
+holds. **The plugin never constructs a credential of its own** — authentication
+lives at the MCP server, not in the client.
 
 ## Installation
 
@@ -166,20 +163,13 @@ Replace `{codebase}` with your company identifier.
 
 ### Authentication
 
-ConnectWise PSA uses Basic Authentication with a combined credential string:
+**The plugin does not authenticate to ConnectWise.** The `connectwise-manage-mcp`
+server holds one credential set and is the only thing that talks to the vendor
+API; every command and skill in this plugin reaches ConnectWise through that
+server's tools.
 
-```
-Authorization: Basic base64({companyId}+{publicKey}:{privateKey})
-clientId: {your-client-id}
-```
-
-**Example Header:**
-```http
-GET /v4_6_release/apis/3.0/service/tickets
-Authorization: Basic Y29tcGFueStwdWJsaWNrZXk6cHJpdmF0ZWtleQ==
-clientId: your-client-id-here
-Content-Type: application/json
-```
+Configuring the server's own credentials is a server-side concern — see the
+server's documentation, not this plugin.
 
 ### Pagination
 
