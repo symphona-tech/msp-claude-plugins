@@ -182,6 +182,10 @@ GET /service/tickets?page=1&pageSize=100
 
 ### Response Headers
 
+The API sets these on a REST response. **A caller here never sees them:** the
+MCP server parses the response body and returns that, so no header reaches the
+tool result. They are documented as API knowledge, not as something to read.
+
 | Header | Description |
 |--------|-------------|
 | `Link` | Contains next/prev page URLs |
@@ -194,15 +198,14 @@ examples against the tool surface.
 
 ### Getting Total Count
 
-```http
-GET /service/tickets?conditions=status/id!=5&pageSize=1&fields=id
-```
+**There is no count tool, and the header that would carry a total does not
+reach the caller.** Neither of the two API-level approaches — reading
+`X-Total-Count`, or a `/count` endpoint — is available through this surface.
 
-Check `X-Total-Count` header or use `/count` endpoint:
-
-```http
-GET /service/tickets/count?conditions=status/id!=5
-```
+To establish a total, page through the result with `cw_search_*` and count what
+returns, stopping when a page yields fewer records than `pageSize`. On a wide
+set that costs real requests against a 60/minute budget, so prefer narrowing
+`conditions` to answering "how many" exactly.
 
 ## Rate Limiting
 
@@ -214,6 +217,10 @@ GET /service/tickets/count?conditions=status/id!=5
 | Per API member | Yes |
 
 ### Rate Limit Headers
+
+The API sets these, and **a caller here cannot read them** for the same reason
+as the response headers above. Budget by counting your own calls rather than by
+monitoring a remaining count you have no access to.
 
 | Header | Description |
 |--------|-------------|
@@ -240,9 +247,9 @@ caller should do instead.
 ### Best Practices for Rate Limits
 
 1. **Back off after a 429, and narrow the query** - the server will not do it for you
-2. **Check headers** - Monitor remaining requests
+2. **Count your own calls** - the remaining-requests header is not visible from here, and the 60/minute budget is shared with every other caller using the same API member
 3. **Batch operations** - Reduce total requests
-4. **Use webhooks** - Instead of polling for changes
+4. **Avoid polling loops** - a repeated wide sweep is the usual way this limit gets hit
 
 ## Error Handling
 
