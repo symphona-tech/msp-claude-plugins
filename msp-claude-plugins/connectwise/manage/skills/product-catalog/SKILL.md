@@ -312,7 +312,7 @@ conditions=_info/lastUpdated>=[2026-01-01T00:00:00Z]
 
 1. **SKU conventions matter** — pick a pattern (`VENDOR-PRODUCT-VARIANT`) and stick to it. Catalog bloat from inconsistent SKUs is the #1 reason CW quote selection gets painful.
 2. **Always set `productClass`** — default CW behavior when it's missing is rarely what MSPs want. Bundles and agreement items especially must be classified correctly or they won't expand / won't roll up MRR.
-3. **`subcategory` and `type` are required** — look them up first with `cw_list_catalog_subcategories` and cache the IDs. Don't hardcode.
+3. **`subcategory` and `type` are required** — `cw_list_catalog_subcategories` resolves the subcategory, and `cw_list_catalog_categories` the category. **There is no product-type tool**, so `type` cannot be resolved from a name here; take the id from an existing comparable item rather than guessing, and say so when it cannot be established.
 4. **Separate `description` from `customerDescription`** — internal SKU naming (short, searchable) vs customer-facing (descriptive, marketing-friendly).
 5. **Retire, don't delete** — set `inactiveFlag=true` instead of deleting. Historical quotes, tickets, and invoices reference the item by ID.
 6. **Bundle children must exist first** — create the component SKUs before the bundle parent, or the bundle creation will fail.

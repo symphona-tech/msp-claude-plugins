@@ -106,18 +106,15 @@ CONNECTWISE_MANAGE_MCP_URL=https://your-gateway-domain/v1/connectwise-manage/mcp
 
 ### Testing Your Connection
 
-Once configured in Claude Code settings, test the connection (env vars injected by Claude Code):
+Call the server's own diagnostic tool:
 
-```bash
-# Build authorization header (Base64 of company+publicKey:privateKey)
-AUTH=$(echo -n "${CW_COMPANY_ID}+${CW_PUBLIC_KEY}:${CW_PRIVATE_KEY}" | base64)
-
-# Test connection
-curl -s "https://${CW_API_URL}/v4_6_release/apis/3.0/system/info" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json" | jq
 ```
+cw_test_connection
+```
+
+It reports whether the server reached ConnectWise PSA with the credentials it
+holds. **The plugin never constructs a credential of its own** — authentication
+lives at the MCP server, not in the client.
 
 ## Installation
 
@@ -135,13 +132,22 @@ curl -s "https://${CW_API_URL}/v4_6_release/apis/3.0/system/info" \
 | `projects` | Project CRUD, phases, templates, resource allocation |
 | `time-entries` | Time entry CRUD, billable/non-billable, work types |
 | `api-patterns` | Authentication, pagination, conditions syntax, rate limiting |
+| `product-catalog` | Catalog items (SKUs), categories, subcategories, manufacturers |
 
 ## Available Commands
 
 | Command | Description |
 |---------|-------------|
-| `/create-ticket` | Create a new service ticket with company lookup and board selection |
-| `/search-tickets` | Search tickets with filters (company, status, priority, date, assignee) |
+| `/add-note` | Add an internal or external note to a ticket |
+| `/check-agreement` | View agreement status and entitlements for a company |
+| `/close-ticket` | Close a ticket with resolution notes |
+| `/create-ticket` | Create a new service ticket |
+| `/get-ticket` | Retrieve detailed ticket information |
+| `/log-time` | Log a time entry against a ticket |
+| `/lookup-config` | Search for configuration items (assets) |
+| `/schedule-entry` | Create a schedule entry or appointment |
+| `/search-tickets` | Search for tickets by various criteria |
+| `/update-ticket` | Update fields on an existing ticket |
 
 ## API Reference
 
@@ -157,20 +163,13 @@ Replace `{codebase}` with your company identifier.
 
 ### Authentication
 
-ConnectWise PSA uses Basic Authentication with a combined credential string:
+**The plugin does not authenticate to ConnectWise.** The `connectwise-manage-mcp`
+server holds one credential set and is the only thing that talks to the vendor
+API; every command and skill in this plugin reaches ConnectWise through that
+server's tools.
 
-```
-Authorization: Basic base64({companyId}+{publicKey}:{privateKey})
-clientId: {your-client-id}
-```
-
-**Example Header:**
-```http
-GET /v4_6_release/apis/3.0/service/tickets
-Authorization: Basic Y29tcGFueStwdWJsaWNrZXk6cHJpdmF0ZWtleQ==
-clientId: your-client-id-here
-Content-Type: application/json
-```
+Configuring the server's own credentials is a server-side concern — see the
+server's documentation, not this plugin.
 
 ### Pagination
 
