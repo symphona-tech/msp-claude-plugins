@@ -1,15 +1,15 @@
 ---
 name: "ConnectWise Manage API Patterns"
 description: >
-  ConnectWise PSA REST API fundamentals: public/private key + clientId
-  authentication, page/pageSize pagination, the conditions query syntax,
-  rate limiting (60/min), and error-response handling.
+  ConnectWise PSA API fundamentals as they reach the cw_* tool surface:
+  the conditions query syntax, page/pageSize pagination, rate limiting
+  (60/min), and error-response handling.
 when_to_use: >-
-  When working with authentication using public/private keys and clientId, pagination with
-  page/pageSize, conditions query syntax, rate limiting (60/min). Use when: connectwise api,
-  connectwise authentication, connectwise auth, api conditions, query builder connectwise,
-  connectwise pagination, api rate limit, connectwise rest, api error connectwise, public key
-  private key, or client id connectwise.
+  When composing a conditions query, paginating with page/pageSize, reading an error
+  response, or reasoning about the 60/min rate limit. Use when: connectwise api, api
+  conditions, query builder connectwise, connectwise pagination, api rate limit,
+  connectwise rest, or api error connectwise. Not for credentials: the MCP server
+  authenticates, and no client in this plugin constructs a ConnectWise credential.
 ---
 
 # ConnectWise PSA API Patterns
@@ -51,54 +51,18 @@ https://api-staging.connectwisedev.com/v4_6_release/apis/3.0/
 
 ## Authentication
 
-### Public/Private Key + Client ID
+**Nothing in this plugin authenticates to ConnectWise PSA.** The
+`connectwise-manage-mcp` server holds one credential set and performs every
+call; skills and commands reach the API only through its `cw_*` tools.
 
-ConnectWise PSA uses Basic Authentication with a combined credential string plus a Client ID header.
+That is why this skill documents *query syntax and response semantics* and not
+credential construction: the header a request carries is the server's concern,
+and a client that built one would be bypassing the boundary rather than using
+it.
 
-### Credential Format
-
-```
-Authorization: Basic base64({companyId}+{publicKey}:{privateKey})
-clientId: {your-client-id}
-```
-
-### Step-by-Step Authentication
-
-1. **Combine credentials:**
-   ```
-   companyId + "+" + publicKey + ":" + privateKey
-   Example: company+publickey:privatekey
-   ```
-
-2. **Base64 encode:**
-   ```
-   base64("company+publickey:privatekey") = "Y29tcGFueStwdWJsaWNrZXk6cHJpdmF0ZWtleQ=="
-   ```
-
-3. **Set headers:**
-   ```http
-   Authorization: Basic Y29tcGFueStwdWJsaWNrZXk6cHJpdmF0ZWtleQ==
-   clientId: your-registered-client-id
-   Content-Type: application/json
-   ```
-
-### Example Request
-
-```http
-GET /v4_6_release/apis/3.0/service/tickets
-Host: api-na.myconnectwise.net
-Authorization: Basic Y29tcGFueStwdWJsaWNrZXk6cHJpdmF0ZWtleQ==
-clientId: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-Content-Type: application/json
-```
-
-See [references/examples.md](references/examples.md) for a JavaScript authentication example and recommended environment variable setup.
-
-### Obtaining Credentials
-
-1. **API Member:** Create in System > Members > API Members
-2. **Public/Private Keys:** Generate for API member
-3. **Client ID:** Register at [ConnectWise Developer Portal](https://developer.connectwise.com/)
+The parts of this skill that remain useful are the ones that describe **what to
+send a tool and how to read what comes back** — the conditions grammar,
+pagination, ordering, and error semantics below.
 
 ## Conditions Query Syntax
 
@@ -223,9 +187,10 @@ GET /service/tickets?page=1&pageSize=100
 | `Link` | Contains next/prev page URLs |
 | `X-Total-Count` | Total record count (if requested) |
 
-Paginate by incrementing `page` until the response has fewer records than
-`pageSize`. See [references/examples.md](references/examples.md) for a
-full fetch-all-pages implementation.
+`page` and `pageSize` are arguments on every `cw_search_*` and `cw_list_*`
+tool. Paginate by incrementing `page` until a page returns fewer records than
+`pageSize`. See [references/examples.md](references/examples.md) for worked
+examples against the tool surface.
 
 ### Getting Total Count
 
