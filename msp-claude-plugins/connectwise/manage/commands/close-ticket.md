@@ -17,7 +17,7 @@ Close a ConnectWise ticket with resolution notes and optional time entry.
 
 ## Tools used
 
-**There is no close tool.** Closure is composed from five:
+**There is no close tool.** Closure is composed from six:
 
 | Step | Tool |
 |------|------|
@@ -39,9 +39,10 @@ the operator before either `cw_update_ticket` step.
    - Capture the current board ID and the current status
    - Check if the ticket is already closed
 
-2. **Resolve the closed status**
-   - `cw_list_statuses` with `boardId=<board_id>` and `conditions=closedStatus=true`
-   - If a status parameter was provided, confirm it appears in that result
+2. **Resolve the statuses this closure needs** — two calls, because one result cannot serve both
+   - `cw_list_statuses` with `boardId=<board_id>` and `conditions=closedStatus=true` — the closed statuses
+   - `cw_list_statuses` with `boardId=<board_id>` and **no condition** — the board's full status list. `Completed` is not a closed status, so it is absent from the filtered result and step 5 cannot resolve it there
+   - If a status parameter was provided, confirm it appears in the *filtered* result; a status that only appears in the full list is not a closed status
    - Otherwise use the board's default closed status
 
 3. **Add the resolution note**
@@ -90,9 +91,10 @@ the operator before either `cw_update_ticket` step.
      operations: [{"op": "replace", "path": "status/id", "value": <completed_status_id>}]
    ```
 
-   Resolve `<completed_status_id>` from the same `cw_list_statuses` call — a
-   `Completed` status is **not** a closed status, so look it up without the
-   `closedStatus=true` filter.
+   Resolve `<completed_status_id>` from the **unfiltered** `cw_list_statuses`
+   result captured in step 2. It is not in the `closedStatus=true` result — a
+   `Completed` status is not a closed status, which is exactly why step 2 makes
+   two calls.
 
 6. **Set the closed status and the resolution**
 
@@ -144,13 +146,13 @@ argument, so this command cannot mark an entry non-billable — see below.
 ### Specific Closed Status
 
 ```
-/close-ticket 12345 "Issue resolved" --status "Completed"
+/close-ticket 12345 "Issue resolved" --status "Closed"
 ```
 
 ### Full Closure with All Options
 
 ```
-/close-ticket 12345 "Configured new email account and tested send/receive functionality" --status "Completed" --member jtech --time_minutes 45 --time_notes "Email configuration and testing"
+/close-ticket 12345 "Configured new email account and tested send/receive functionality" --status "Closed" --member jtech --time_minutes 45 --time_notes "Email configuration and testing"
 ```
 
 ## Output
@@ -195,7 +197,7 @@ Final State:
   Company:    Acme Corporation
   Summary:    Server maintenance required
   Board:      Managed Services
-  Status:     Completed
+  Status:     Closed
   Priority:   Medium (3)
 
 Closed By:   Jane Technician
@@ -249,10 +251,11 @@ Error: Status "In Progress" is not a closed status
 
 Available closed statuses for this board:
 - Closed
-- Completed
 - Cancelled
 
-Example: /close-ticket 12345 "Resolution" --status "Completed"
+`Completed` is a transition status, not a closed one, so it is not accepted here.
+
+Example: /close-ticket 12345 "Resolution" --status "Closed"
 ```
 
 ### No Closed Status on Board
@@ -270,7 +273,7 @@ to add a closed status or move the ticket to a different board first.
 Error: Invalid time entry
 
 time_minutes must be a positive number.
-Example: /close-ticket 12345 "Resolution" --time_minutes 30
+Example: /close-ticket 12345 "Resolution" --member jtech --time_minutes 30
 ```
 
 ### Agreement Validation
