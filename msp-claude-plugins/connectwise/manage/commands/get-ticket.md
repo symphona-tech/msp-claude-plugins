@@ -10,52 +10,37 @@ Retrieve detailed ticket information including status, notes, time entries, and 
 
 ## Prerequisites
 
-- Valid ConnectWise PSA API credentials configured
-- User must have ticket read permissions
+- The `connectwise-manage-mcp` server is configured and reachable
+- The server's API member must hold ticket read permissions
+- Ticket must exist and be accessible
+
+## Tools used
+
+| Step | Tool |
+|------|------|
+| Read the ticket | `cw_get_ticket` |
+| Read its notes | `cw_get_ticket_notes` |
+| Read its time entries | `cw_search_time_entries` |
 
 ## Steps
 
-1. **Validate ticket exists**
-   - Fetch ticket by ID
-   - Handle 404 if ticket not found
-   - Check user has access to view ticket
+1. **Retrieve base ticket information**
+   - `cw_get_ticket` with `id=<ticket_id>`
+   - Confirm the ticket is accessible before making any further call
 
-2. **Retrieve base ticket information**
-   ```http
-   GET /service/tickets/{id}
-   ```
-   - Include company, contact, status, priority, board details
-   - Parse SLA information if available
+2. **Fetch ticket notes (if include_notes=true)**
+   - `cw_get_ticket_notes` with `id=<ticket_id>`
 
-3. **Fetch ticket notes (if include_notes=true)**
-   ```http
-   GET /service/tickets/{id}/notes?pageSize=100&orderBy=dateCreated desc
-   ```
-   - Retrieve all notes with author and timestamp
-   - Distinguish internal vs external notes
+3. **Fetch time entries (if include_time=true)**
+   - `cw_search_time_entries` with
+     `conditions=chargeToId=<ticket_id> and chargeToType="ServiceTicket"`
+   - This is a search across all time entries filtered to the ticket, not a
+     ticket sub-resource, so it pages independently of the ticket read
 
-4. **Fetch time entries (if include_time=true)**
-   ```http
-   GET /service/tickets/{id}/timeentries?pageSize=100&orderBy=timeStart desc
-   ```
-   - Calculate total hours logged
-   - Show billable vs non-billable breakdown
-
-5. **Fetch configurations (if include_configs=true)**
-   ```http
-   GET /service/tickets/{id}/configurations?pageSize=100
-   ```
-   - List associated assets/devices
-   - Include configuration type and status
-
-6. **Fetch tasks (if include_tasks=true)**
-   ```http
-   GET /service/tickets/{id}/tasks?pageSize=100&orderBy=sequence
-   ```
-   - Show task list with completion status
-   - Include estimated vs actual time
-
-7. **Format and return comprehensive ticket view**
+4. **Format and return the ticket view**
+   - Include whichever sections resolved
+   - **Name any section that was requested and is unavailable** rather than
+     returning a view that looks complete
 
 ## Parameters
 
@@ -64,8 +49,8 @@ Retrieve detailed ticket information including status, notes, time entries, and 
 | ticket_id | integer | Yes | - | ConnectWise ticket ID |
 | include_notes | boolean | No | true | Include ticket notes |
 | include_time | boolean | No | false | Include time entries |
-| include_configs | boolean | No | false | Include configuration items |
-| include_tasks | boolean | No | false | Include service tasks |
+| include_configs | boolean | No | false | **Unavailable** — see below |
+| include_tasks | boolean | No | false | **Unavailable** — see below |
 
 ## Examples
 
@@ -171,61 +156,6 @@ Summary:
 ================================================================================
 ```
 
-### With Configuration Items
-
-```
-================================================================================
-Configuration Items (2)
-================================================================================
-
-1. ACME-EXCH01 (Server)
-   Type:     Server - Exchange
-   Status:   Active
-   Serial:   SN123456789
-
-2. ACME-DC01 (Server)
-   Type:     Server - Domain Controller
-   Status:   Active
-   Serial:   SN987654321
-
-================================================================================
-```
-
-### With Tasks
-
-```
-================================================================================
-Tasks (3)
-================================================================================
-
-[x] 1. Initial triage and reproduction
-       Estimated: 0.5h | Actual: 0.5h
-
-[x] 2. Identify root cause
-       Estimated: 1.0h | Actual: 1.0h
-
-[ ] 3. Apply fix and verify resolution
-       Estimated: 1.0h | Actual: -
-
-Progress: 2/3 tasks complete (67%)
-
-================================================================================
-```
-
-## API Authentication
-
-```bash
-# Base64 encode credentials: company+publicKey:privateKey
-AUTH=$(echo -n "${CW_COMPANY}+${CW_PUBLIC_KEY}:${CW_PRIVATE_KEY}" | base64)
-
-# Make API request
-curl -s -X GET \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/service/tickets/${TICKET_ID}" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json"
-```
-
 ## Error Handling
 
 ### Ticket Not Found
@@ -263,10 +193,19 @@ Ticket ID must be a numeric value.
 Example: /get-ticket 12345
 ```
 
-## Related Commands
+## Not available through the tool surface
 
-- `/search-tickets` - Search for tickets
-- `/update-ticket` - Update ticket fields
-- `/add-note` - Add note to ticket
-- `/close-ticket` - Close the ticket
-- `/log-time` - Log time against ticket
+Two of this command's original sections have no tool in the inventoried surface
+and are **not** retrievable:
+
+| Requested | Would need |
+|-----------|------------|
+| `include_configs` — configuration items linked to the ticket | A ticket-scoped configuration tool. `cw_search_configurations` searches company configurations and cannot filter by ticket |
+| `include_tasks` — ticket tasks | A ticket task tool |
+
+When either flag is passed, **say so plainly and continue with the rest**. Do
+not substitute a company-wide configuration search for the ticket's linked
+configurations — it answers a different question and would read as if it
+answered this one.
+
+## Related Commands
