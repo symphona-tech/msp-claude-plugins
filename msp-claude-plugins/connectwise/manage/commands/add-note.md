@@ -10,16 +10,22 @@ Add an internal or external note to a ConnectWise ticket.
 
 ## Prerequisites
 
-- Valid ConnectWise PSA API credentials configured
-- User must have ticket note creation permissions
+- The `connectwise-manage-mcp` server is configured and reachable
+- The server's API member must hold ticket note permissions
 - Ticket must exist and be accessible
+
+## Tools used
+
+| Step | Tool |
+|------|------|
+| Validate ticket | `cw_get_ticket` |
+| Create a note | `cw_add_ticket_note` |
+| Update a ticket field | `cw_update_ticket` |
 
 ## Steps
 
 1. **Validate ticket exists**
-   ```http
-   GET /service/tickets/{id}
-   ```
+   - `cw_get_ticket` with `id=<ticket_id>`
    - Confirm ticket is accessible
    - Check if ticket is closed (warn if adding note to closed ticket)
 
@@ -27,32 +33,37 @@ Add an internal or external note to a ConnectWise ticket.
    - If `detail_description`, `internal_analysis`, or `resolution` is true, update ticket fields
    - Otherwise, create a service note
 
-3. **For standard notes - Create the note**
-   ```http
-   POST /service/tickets/{id}/notes
-   Content-Type: application/json
+3. **For standard notes — create the note**
 
-   {
-     "text": "<note_text>",
-     "detailDescriptionFlag": false,
-     "internalAnalysisFlag": <true if flag=internal or both>,
-     "resolutionFlag": false,
-     "customerUpdatedFlag": <true if flag=external or both>,
-     "processNotifications": true
-   }
+   ```
+   cw_add_ticket_note
+     id:                   <ticket_id>
+     text:                 "<note_text>"
+     internalAnalysisFlag: <true if flag=internal or both>
+     customerUpdatedFlag:  <true if flag=external or both>
    ```
 
-4. **For ticket field updates - Patch the ticket**
-   ```http
-   PATCH /service/tickets/{id}
-   Content-Type: application/json
+   The flags are the whole of the visibility decision, so set them deliberately
+   — `customerUpdatedFlag` is what reaches the customer portal and triggers
+   notification.
 
-   [
-     {"op": "replace", "path": "/detailDescription", "value": "<text>"},
-     {"op": "replace", "path": "/internalAnalysis", "value": "<text>"},
-     {"op": "replace", "path": "/resolution", "value": "<text>"}
-   ]
+4. **For ticket field updates — patch the ticket**
+
+   `cw_update_ticket` takes JSON Patch operations:
+
    ```
+   cw_update_ticket
+     id:         <ticket_id>
+     operations: [
+       {"op": "replace", "path": "detailDescription", "value": "<text>"},
+       {"op": "replace", "path": "internalAnalysis",  "value": "<text>"},
+       {"op": "replace", "path": "resolution",        "value": "<text>"}
+     ]
+   ```
+
+   Send only the operations the caller asked for. `replace` overwrites the
+   field — read the current value with `cw_get_ticket` first and concatenate if
+   the intent is to append.
 
 5. **Confirm note was added**
    - Return note ID and timestamp
@@ -85,11 +96,11 @@ Appends to the resolution field. Use for documenting how the issue was resolved.
 
 ## Visibility Flags
 
-| Flag | Internal Users | Customer Portal | Email Notifications |
-|------|----------------|-----------------|---------------------|
-| internal | Yes | No | No |
-| external | Yes | Yes | Yes (if configured) |
-| both | Yes | Yes | Yes (if configured) |
+| Flag | `cw_add_ticket_note` arguments | Internal Users | Customer Portal | Email Notifications |
+|------|--------------------------------|----------------|-----------------|---------------------|
+| internal | `internalAnalysisFlag: true` | Yes | No | No |
+| external | `customerUpdatedFlag: true` | Yes | Yes | Yes (if configured) |
+| both | both flags true | Yes | Yes | Yes (if configured) |
 
 ## Examples
 
@@ -199,47 +210,6 @@ New Content:
 Root cause identified as DNS misconfiguration on primary DC"
 ```
 
-## API Authentication
-
-```bash
-# Base64 encode credentials: company+publicKey:privateKey
-AUTH=$(echo -n "${CW_COMPANY}+${CW_PUBLIC_KEY}:${CW_PRIVATE_KEY}" | base64)
-
-# Create internal note
-curl -s -X POST \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/service/tickets/${TICKET_ID}/notes" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Note content here",
-    "internalAnalysisFlag": true,
-    "processNotifications": true
-  }'
-
-# Create external note
-curl -s -X POST \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/service/tickets/${TICKET_ID}/notes" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Note content here",
-    "customerUpdatedFlag": true,
-    "processNotifications": true
-  }'
-
-# Update ticket field
-curl -s -X PATCH \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/service/tickets/${TICKET_ID}" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json" \
-  -d '[
-    {"op": "replace", "path": "/internalAnalysis", "value": "Analysis content here"}
-  ]'
-```
-
 ## Error Handling
 
 ### Ticket Not Found
@@ -264,7 +234,7 @@ Please provide note content:
 ```
 Error: Permission denied
 
-You do not have permission to add notes to tickets on the "Escalations" board.
+The API member does not have permission to add notes on the "Escalations" board.
 Contact your ConnectWise administrator.
 ```
 
@@ -313,6 +283,9 @@ Content:
 
 Proceed? [Y/n]
 ```
+
+**There is no fallback.** If `cw_add_ticket_note` fails, report the failure and
+stop rather than reaching ConnectWise by another route.
 
 ## Related Commands
 
