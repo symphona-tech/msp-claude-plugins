@@ -25,11 +25,24 @@ Contacts in ConnectWise PSA represent individuals at your client companies. Cont
   separate entity that contact searches never return; query it through
   `connectwise-psa-api-patterns`.
 
-## API Endpoint
+## Tool surface
+
+Contacts are reached through `connectwise-manage-mcp`, never by direct REST.
+The endpoint below is named for orientation only.
 
 ```
 Base: /company/contacts
 ```
+
+| Tool | Purpose |
+|------|---------|
+| `cw_search_contacts` | Search with CW conditions syntax |
+| `cw_get_contact` | Fetch one contact by ID |
+| `cw_create_contact` | Create a contact |
+
+**There is no contact update tool and no contact delete tool.** This surface is
+read-and-create only for contacts — see
+[Not available through the tool surface](#not-available-through-the-tool-surface).
 
 ## Contact Types
 
@@ -134,34 +147,24 @@ Communication items store contact methods (email, phone, fax, etc.) for a contac
 | 5 | Pager | Pager (legacy) |
 | 6 | Direct | Direct line |
 
-### Add Communication Item
+### Communication item structure
 
-```http
-POST /company/contacts/{contactId}/communications
-Content-Type: application/json
+**No tool adds or edits communication items.** The shape below documents how
+ConnectWise models one, for reading a contact record that carries them:
 
+```json
 {
-  "type": {"id": 1},
+  "type": {"id": 1, "name": "Email"},
   "value": "john.smith@acme.com",
   "defaultFlag": true,
   "communicationType": "Email"
 }
 ```
 
-### Add Phone Number
+### Phone number structure
 
-```http
-POST /company/contacts/{contactId}/communications
-Content-Type: application/json
-
-{
-  "type": {"id": 2},
-  "value": "555-123-4567",
-  "extension": "101",
-  "defaultFlag": true,
-  "communicationType": "Direct"
-}
-```
+A phone number is a communication item whose type is a phone type; the same
+read-only constraint applies.
 
 ## Portal Access
 
@@ -176,17 +179,11 @@ Content-Type: application/json
 | 5 | Read Only | Read only, no create |
 | 6 | Restricted | Minimal access |
 
-### Enable Portal Access
+### Portal access fields
 
-```http
-PATCH /company/contacts/{id}
-Content-Type: application/json
-
-{
-  "portalSecurityLevel": 2,
-  "disablePortalLoginFlag": false
-}
-```
+Portal access is represented on the contact record by `portalSecurityLevel` and
+the portal flags documented above. **No tool sets them** — the fields are
+readable through `cw_get_contact` and changeable only in the PSA.
 
 ### Portal Password Reset
 
@@ -200,82 +197,40 @@ To invite a contact to the portal:
 3. Set `disablePortalLoginFlag` = false
 4. Portal sends automatic invitation email
 
-## API Operations
-
-### Create Contact
-
-```http
-POST /company/contacts
-Content-Type: application/json
-
-{
-  "firstName": "John",
-  "lastName": "Smith",
-  "company": {"id": 12345},
-  "title": "IT Director",
-  "type": {"id": 4}
-}
-```
-
-### Create Contact with Communication Items
-
-```http
-POST /company/contacts
-Content-Type: application/json
-
-{
-  "firstName": "John",
-  "lastName": "Smith",
-  "company": {"id": 12345},
-  "title": "IT Director",
-  "type": {"id": 4},
-  "communicationItems": [
-    {
-      "type": {"id": 1},
-      "value": "john.smith@acme.com",
-      "defaultFlag": true
-    },
-    {
-      "type": {"id": 2},
-      "value": "555-123-4567",
-      "extension": "101",
-      "defaultFlag": true
-    }
-  ]
-}
-```
-
-### Get Contact
-
-```http
-GET /company/contacts/{id}
-```
-
-### Update Contact
-
-```http
-PATCH /company/contacts/{id}
-Content-Type: application/json
-
-{
-  "title": "CTO",
-  "type": {"id": 2}
-}
-```
+## Tool Operations
 
 ### Search Contacts
 
-```http
-GET /company/contacts?conditions=company/id=12345 and inactiveFlag=false
+```
+cw_search_contacts
+  conditions: "company/id=12345 and inactiveFlag=false"
+  orderBy:    "lastName asc"
 ```
 
-### Delete Contact
+### Get a Contact
 
-```http
-DELETE /company/contacts/{id}
+```
+cw_get_contact  id: 67890
 ```
 
-**Note:** Contacts with related records (tickets, etc.) cannot be deleted. Mark as inactive instead.
+### Create a Contact
+
+```
+cw_create_contact
+  firstName: "John"
+  lastName:  "Smith"
+  companyId: 12345
+```
+
+Check the tool's input schema for the fields it accepts. The field reference
+above documents the full ConnectWise model, which is **wider than the tool's
+arguments**.
+
+### Updating a contact
+
+**Not possible through this surface.** There is no `cw_update_contact`. A
+contact's details, portal access and communication items can be read but not
+changed from here; corrections are made in the PSA directly.
 
 ## Common Query Patterns
 
@@ -328,17 +283,9 @@ conditions=type/id=2 and inactiveFlag=false
 
 ### Contact Notes
 
-```http
-GET /company/contacts/{id}/notes
-POST /company/contacts/{id}/notes
-```
-
-Note Fields:
-| Field | Type | Description |
-|-------|------|-------------|
-| `text` | string | Note content |
-| `type` | object | `{id: noteTypeId}` |
-| `flagged` | boolean | Flagged for attention |
+Contacts carry their own note collection in ConnectWise. **No tool reads or
+writes it** — `cw_get_ticket_notes` is for service tickets, and there is no
+contact equivalent.
 
 ## Best Practices
 
@@ -359,8 +306,24 @@ Note Fields:
 | Cannot delete | Has related records | Mark as inactive instead |
 | Email exists | Duplicate email | Use existing contact |
 
-## Related Skills
+## Not available through the tool surface
 
-- [ConnectWise Companies](../companies/SKILL.md) - Company management
-- [ConnectWise Tickets](../tickets/SKILL.md) - Service tickets
-- [ConnectWise API Patterns](../api-patterns/SKILL.md) - Query syntax and auth
+| Operation | Would need |
+|-----------|------------|
+| Updating a contact | A contact update tool. **None exists** — unlike companies, which have `cw_update_company` |
+| Deleting a contact | A delete tool. The surface exposes none at all |
+| Adding a communication item (phone, email) | A communications tool |
+| Enabling portal access, resetting a portal password, sending an invitation | A portal tool |
+| Contact notes | A contact-notes tool |
+
+**Contacts are the most narrowed entity in this plugin.** Companies can be
+created and updated; contacts can be created and read only. A workflow that
+creates a contact and then corrects it cannot complete here — get the details
+right at creation, or make the correction in the PSA.
+
+The communication-item, portal-access and notes sections above are retained as
+**domain knowledge** for reading a contact record. They describe how
+ConnectWise models this data; they are **not workflows this plugin can
+execute.**
+
+## Related Skills
