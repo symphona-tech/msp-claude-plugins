@@ -113,7 +113,9 @@ cw_create_project
 ```
 
 Check the tool's input schema for the fields it accepts; the concepts above
-describe the full ConnectWise model, which is wider.
+describe the full ConnectWise model, which is wider. See
+[references/api.md](references/api.md) for the request shapes behind each
+operation and for what the surface does not reach.
 
 ### Work a project ticket
 
@@ -174,5 +176,9 @@ overdue-phase detection all depend on them, and none is available. Where a
 review would report on phases, say so rather than substituting project-level
 totals — the two answer different questions, and a project-level read presented
 as a delivery picture is the failure mode worth avoiding.
+
+[references/api.md](references/api.md) records the request shape behind each of
+these, so what is missing stays legible when a record referencing a phase or a
+template comes back from a read.
 
 ## Related Skills
