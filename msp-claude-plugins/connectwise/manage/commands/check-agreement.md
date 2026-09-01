@@ -102,7 +102,7 @@ Found 2 active agreements
 Type:           Managed Services
 Status:         Active
 Start Date:     2025-01-01
-End Date:       2025-12-31
+End Date:       2026-12-31
 
 Billing:
   Cycle:        Monthly
@@ -160,7 +160,7 @@ Company:
 Status:
   Active:         Yes
   Start Date:     2025-01-01
-  End Date:       2025-12-31
+  End Date:       2026-12-31
   Auto Renew:     Yes
   Days Until Exp: 300 days
 

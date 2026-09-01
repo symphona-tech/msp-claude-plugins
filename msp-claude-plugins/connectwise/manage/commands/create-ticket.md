@@ -50,7 +50,12 @@ Create a new service ticket in ConnectWise PSA with specified details.
    - `cw_list_statuses` with `boardId=<id>` to resolve the status, or use the board default "New"
 
 5. **Check agreement coverage**
-   - `cw_search_agreements` with `conditions=company/id=<id> and cancelledFlag=false`
+   - `cw_search_agreements` with
+     `conditions=company/id=<id> and cancelledFlag=false and (endDate >= [<today>] or endDate = null)`
+   - **`cancelledFlag=false` alone is not "active".** An agreement that simply
+     expired is never cancelled, so the unfiltered condition reports lapsed
+     coverage as current. The `endDate` clause is what excludes it; the null
+     branch keeps open-ended agreements.
    - Warn if no active agreement (may be T&M billing)
 
 6. **Create the ticket**
