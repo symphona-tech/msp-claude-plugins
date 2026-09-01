@@ -1,7 +1,7 @@
 ---
 description: Close a ConnectWise PSA ticket with resolution notes
-argument-hint: "<ticket_id> <resolution> [status] [time_minutes] [time_notes] [billable]"
-arguments: [ticket_id, resolution, status, time_minutes, time_notes, billable]
+argument-hint: "<ticket_id> <resolution> [status] [member] [time_minutes] [time_notes]"
+arguments: [ticket_id, resolution, status, member, time_minutes, time_notes]
 ---
 
 # Close ConnectWise PSA Ticket
@@ -17,33 +17,34 @@ Close a ConnectWise ticket with resolution notes and optional time entry.
 
 ## Tools used
 
-**There is no close tool.** Closure is composed from four:
+**There is no close tool.** Closure is composed from five:
 
 | Step | Tool |
 |------|------|
 | Read current state | `cw_get_ticket` |
 | Resolve a closed status | `cw_list_statuses` |
 | Add the resolution note | `cw_add_ticket_note` |
+| Resolve the member | `cw_search_members` |
 | Log final time (optional) | `cw_create_time_entry` |
-| Set the status | `cw_update_ticket` |
+| Move status | `cw_update_ticket` |
 
 Closing is not a bookkeeping change: it stops the SLA clock and fires whatever
 close notification and satisfaction survey the board is wired to. Confirm with
-the operator before the `cw_update_ticket` step.
+the operator before either `cw_update_ticket` step.
 
 ## Steps
 
 1. **Validate ticket exists and get current state**
    - `cw_get_ticket` with `id=<ticket_id>`
-   - Get the current board ID for the status lookup
-   - Check if ticket is already closed
+   - Capture the current board ID and the current status
+   - Check if the ticket is already closed
 
-2. **Resolve closed status**
+2. **Resolve the closed status**
    - `cw_list_statuses` with `boardId=<board_id>` and `conditions=closedStatus=true`
    - If a status parameter was provided, confirm it appears in that result
    - Otherwise use the board's default closed status
 
-3. **Add resolution note**
+3. **Add the resolution note**
 
    ```
    cw_add_ticket_note
@@ -53,23 +54,47 @@ the operator before the `cw_update_ticket` step.
      customerUpdatedFlag: true
    ```
 
-4. **Log time entry (if time_minutes provided)**
+4. **Log a time entry (if time_minutes provided)**
+
+   Resolve the member first — `cw_create_time_entry` requires `memberId` and
+   will not infer it. The server authenticates as one API member, which is not
+   the technician the time belongs to.
 
    ```
+   cw_search_members  conditions: "identifier=\"<member>\""
+
    cw_create_time_entry
      chargeToType: "ServiceTicket"
      chargeToId:   <ticket_id>
-     memberId:     <member_id>
+     memberId:     <resolved_member_id>
      timeStart:    "<ISO 8601 start>"
      timeEnd:      "<ISO 8601 end>"
      notes:        "<time_notes or resolution>"
    ```
 
-   `chargeToType`, `chargeToId`, `memberId` and `timeStart` are all required.
-   Resolve the member with `cw_search_members` if the caller did not supply one
-   — the tool will not infer it.
+   **If `member` was not supplied, stop and ask for it.** Do not fall back to
+   the API member the server authenticates as — that would attribute a
+   technician's billable time to a shared service account.
 
-5. **Update ticket status to closed**
+5. **Move the ticket through `Completed` before `Closed`**
+
+   A ticket **must pass through `Completed` before `Closed`**. Patching straight
+   to a closed status fails with an error whose message reads like a permissions
+   failure, which is how this goes wrong quietly.
+
+   If the current status is not already `Completed`, patch there first:
+
+   ```
+   cw_update_ticket
+     id:         <ticket_id>
+     operations: [{"op": "replace", "path": "status/id", "value": <completed_status_id>}]
+   ```
+
+   Resolve `<completed_status_id>` from the same `cw_list_statuses` call — a
+   `Completed` status is **not** a closed status, so look it up without the
+   `closedStatus=true` filter.
+
+6. **Set the closed status and the resolution**
 
    ```
    cw_update_ticket
@@ -80,7 +105,7 @@ the operator before the `cw_update_ticket` step.
      ]
    ```
 
-6. **Return closure confirmation**
+7. **Return closure confirmation**
 
 ## Parameters
 
@@ -89,9 +114,12 @@ the operator before the `cw_update_ticket` step.
 | ticket_id | integer | Yes | - | ConnectWise ticket ID to close |
 | resolution | string | Yes | - | Resolution notes |
 | status | string | No | Board default | Closed status name |
+| member | string | Conditional | - | Member identifier the time entry belongs to. **Required when `time_minutes` is given** |
 | time_minutes | integer | No | - | Final time entry in minutes |
 | time_notes | string | No | - | Notes for time entry |
-| billable | boolean | No | true | Mark time as billable |
+
+**There is no `billable` parameter.** `cw_create_time_entry` exposes no billing
+argument, so this command cannot mark an entry non-billable — see below.
 
 ## Examples
 
@@ -104,13 +132,13 @@ the operator before the `cw_update_ticket` step.
 ### With Time Entry
 
 ```
-/close-ticket 12345 "Server patched and rebooted successfully" --time_minutes 30 --time_notes "Applied security patches"
+/close-ticket 12345 "Server patched and rebooted successfully" --member jtech --time_minutes 30 --time_notes "Applied security patches"
 ```
 
-### Non-Billable Time
+### With an Explicit Member
 
 ```
-/close-ticket 12345 "Hardware replaced under warranty" --time_minutes 60 --billable false
+/close-ticket 12345 "Hardware replaced under warranty" --member jtech --time_minutes 60
 ```
 
 ### Specific Closed Status
@@ -122,7 +150,7 @@ the operator before the `cw_update_ticket` step.
 ### Full Closure with All Options
 
 ```
-/close-ticket 12345 "Configured new email account and tested send/receive functionality" --status "Completed" --time_minutes 45 --time_notes "Email configuration and testing" --billable true
+/close-ticket 12345 "Configured new email account and tested send/receive functionality" --status "Completed" --member jtech --time_minutes 45 --time_notes "Email configuration and testing"
 ```
 
 ## Output
@@ -161,7 +189,6 @@ Resolution:
 Time Entry Added:
   Duration:   30 minutes (0.5 hours)
   Notes:      Applied security patches
-  Billable:   Yes
   Work Type:  Remote Support
 
 Final State:
@@ -177,7 +204,7 @@ Closed At:   2026-02-04 16:00:00
 Time Summary:
   Previous:   2.0 hours
   This Entry: 0.5 hours
-  Total:      2.5 hours (all billable)
+  Total:      2.5 hours
 
 URL: https://na.myconnectwise.net/v4_6_release/services/system_io/Service/fv_sr100_request.rails?service_recid=12345
 ```
@@ -259,7 +286,6 @@ Time to Log: 0.5 hours
 This will exceed the agreement by 0.25 hours (billed as overage).
 
 Proceed? [Y/n]
-Log as non-billable? [n]
 Cancel? [c]
 ```
 
@@ -291,10 +317,21 @@ after the note and the time entry landed, **say exactly which steps completed**
 — the ticket is open with a resolution note attached, and a retry that repeats
 every step would double-log the time.
 
-## Related Commands
+## Not available through the tool surface
 
-- `/get-ticket` - View ticket details before closing
-- `/update-ticket` - Update ticket fields
-- `/add-note` - Add note without closing
-- `/log-time` - Log time without closing
-- `/search-tickets` - Find tickets to close
+| Requested | Would need |
+|-----------|------------|
+| Marking the final time entry non-billable | A billing argument on `cw_create_time_entry` |
+
+`cw_create_time_entry` accepts `chargeToType`, `chargeToId`, `memberId`,
+`timeStart`, `timeEnd`, `actualHours`, `notes`, `internalNotes`, `workTypeId`
+and `workRoleId` — **and no billing argument at all.** A time entry read back
+from `cw_search_time_entries` carries `billableOption`, so the field exists on
+the record; it simply cannot be set through this surface.
+
+**An entry created here therefore takes the server's default billing
+treatment, which in most configurations is billable.** If the work must not be
+billed, do not log it through this command — record the time in the PSA
+directly. Never create the entry and describe it as non-billable.
+
+## Related Commands
