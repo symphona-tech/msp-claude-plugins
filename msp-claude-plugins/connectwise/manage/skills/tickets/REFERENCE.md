@@ -6,7 +6,7 @@ Status values, priority levels, service boards, SLA configuration, note types, a
 
 ## Ticket Status Values
 
-Status values are configurable per board. Query `GET /service/boards/{id}/statuses` for board-specific values.
+Status values are configurable per board. Resolve them with `cw_list_statuses`, passing the ticket's `boardId`.
 
 | Status | SLA Clock | Notes |
 |--------|-----------|-------|

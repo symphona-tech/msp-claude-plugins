@@ -70,7 +70,7 @@ Work types categorize the nature of work performed.
 | On-site | On-site work | Billable |
 | Administrative | Admin tasks | Non-billable |
 
-Query `GET /time/workTypes` for the configured list.
+**No tool enumerates work types**, and none resolves one by name, so `workTypeId` cannot be looked up here. The table above is illustrative; leave the field unset and let the agreement and board defaults apply.
 
 ## Work Roles
 
@@ -85,7 +85,7 @@ Work roles determine billing rates based on skill level.
 | Consultant | Expert consultant | $200-250/hr |
 | Project Manager | PM work | $125-175/hr |
 
-Query `GET /time/workRoles` for the configured list.
+**No tool enumerates work roles**, and none resolves one by name. This matters more than the work-type gap: the work role sets the billing rate, so a guessed id bills the customer wrongly and nothing downstream flags it. Leave `workRoleId` unset.
 
 ## Billing Options
 
