@@ -75,7 +75,7 @@ Standard company statuses:
 | 2 | Inactive | Inactive company | No |
 | 3 | Not Approved | Pending approval | No |
 
-Query `/company/companies/statuses` for available statuses.
+Company statuses are configurable. No tool enumerates them, so treat the table above as illustrative and confirm the values configured in your own PSA.
 
 ## Complete Company Field Reference
 

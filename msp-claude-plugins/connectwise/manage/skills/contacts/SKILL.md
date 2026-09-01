@@ -56,7 +56,7 @@ Standard contact types in ConnectWise PSA:
 | 4 | Technical | Technical contact |
 | 5 | Sales | Sales contact |
 
-**Note:** Contact types are configurable. Query `/company/contacts/types` for your instance's types.
+**Note:** Contact types are configurable. No tool enumerates them, so treat the table above as illustrative and confirm the values configured in your own PSA.
 
 ## Complete Contact Field Reference
 
@@ -194,11 +194,15 @@ Portal passwords are managed through the ConnectWise portal. The API does not ex
 
 ### Portal Invitation
 
-To invite a contact to the portal:
-1. Ensure contact has valid email
-2. Set `portalSecurityLevel` > 0
-3. Set `disablePortalLoginFlag` = false
-4. Portal sends automatic invitation email
+**Not available here.** An invitation follows from the portal flags, and no tool
+sets them — there is no contact update tool at all. The sequence below records
+what governs an invitation so a contact record can be read and understood; it is
+performed in the PSA.
+
+1. The contact has a valid email communication item
+2. `portalSecurityLevel` is greater than 0
+3. `disablePortalLoginFlag` is false
+4. The portal sends the invitation automatically
 
 ## Tool Operations
 

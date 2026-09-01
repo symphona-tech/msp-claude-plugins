@@ -63,7 +63,7 @@ Standard project statuses in ConnectWise PSA:
 | 4 | Cancelled | Cancelled project |
 | 5 | Waiting | Awaiting approval/resources |
 
-Query `/project/projects/statuses` for configurable statuses.
+Project statuses are configurable. No tool enumerates them, so treat the table above as illustrative and confirm the values configured in your own PSA.
 
 ### Project Types
 
@@ -142,10 +142,10 @@ top level while individual phases run overdue, and no tool exposes phases.
 
 ## Gotchas
 
-- **Templates are just projects with `type/id=2`.** There's no separate templates endpoint — query `/project/projects?conditions=type/id=2`.
+- **Templates are just projects with a template project type.** There is no separate template tool; `cw_search_projects` finds them by filtering on the type, e.g. `conditions=type/name="Template"`. Resolve the type for your own instance rather than assuming an id — project types are configurable.
 - **`projectTemplateId` only applies at creation.** It copies phases, tickets, budget/billing settings, and team assignments once; it does not keep the new project in sync with later template edits.
 - **`budgetAnalysis` is server-calculated**, not settable — use `budgetHours`/`budgetAmount` to set the cap and read `budgetAnalysis` to see whether the project is over/under/on budget.
-- **Project tickets are regular service tickets** (`POST /service/tickets`) with `project`/`phase` fields set — there's no separate project-ticket-creation endpoint.
+- **Project tickets are a separate entity from service tickets.** They are read with `cw_search_project_tickets`; no tool creates one. Do not reach for `cw_create_ticket` — that writes a service ticket, which is not the same record.
 
 ## Best Practices
 
