@@ -149,7 +149,10 @@ Communication items store contact methods (email, phone, fax, etc.) for a contac
 
 ### Communication item structure
 
-**No tool adds or edits communication items.** The shape below documents how
+**Communication items can be set when a contact is created, but not changed
+afterwards.** `cw_create_contact` accepts `email` and `phone` and the server
+converts them into communication items. There is no tool that adds, edits or
+removes an item on an existing contact. The shape below documents how
 ConnectWise models one, for reading a contact record that carries them:
 
 ```json
@@ -220,7 +223,13 @@ cw_create_contact
   firstName: "John"
   lastName:  "Smith"
   companyId: 12345
+  email:     "john.smith@acme.com"
+  phone:     "555-0100"
 ```
+
+`email` and `phone` are optional arguments on the tool. The server turns them
+into communication items on the new contact — an `Email` item and a `Direct`
+phone item — so a contact's primary contact methods are set at creation time.
 
 Check the tool's input schema for the fields it accepts. The field reference
 above documents the full ConnectWise model, which is **wider than the tool's
@@ -230,7 +239,9 @@ arguments**.
 
 **Not possible through this surface.** There is no `cw_update_contact`. A
 contact's details, portal access and communication items can be read but not
-changed from here; corrections are made in the PSA directly.
+changed from here; corrections are made in the PSA directly. Communication
+items are the one partial exception — they can be *set* at creation through
+`cw_create_contact`'s `email` and `phone` arguments, just never revised.
 
 ## Common Query Patterns
 
@@ -312,7 +323,7 @@ contact equivalent.
 |-----------|------------|
 | Updating a contact | A contact update tool. **None exists** — unlike companies, which have `cw_update_company` |
 | Deleting a contact | A delete tool. The surface exposes none at all |
-| Adding a communication item (phone, email) | A communications tool |
+| Adding or changing a communication item on an *existing* contact | A communications tool. Setting `email` and `phone` at creation works; editing afterwards does not |
 | Enabling portal access, resetting a portal password, sending an invitation | A portal tool |
 | Contact notes | A contact-notes tool |
 

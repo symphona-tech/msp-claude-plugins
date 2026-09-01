@@ -91,7 +91,18 @@ detection all depend on phases, and none is available.
 
 ## Get Templates
 
-**No tool lists project templates.**
+Project templates are project records distinguished by their project type, so
+`cw_search_projects` lists them like any other project — it forwards
+`conditions` to `/project/projects` unchanged:
+
+```
+cw_search_projects
+  conditions: "type/name=\"Template\""
+```
+
+Resolve the template type's name or id from your own PSA rather than assuming
+one; project types are configurable per tenant. What is missing is not the
+ability to *find* a template but the ability to *apply* one — see below.
 
 ## Create Project from Template
 
