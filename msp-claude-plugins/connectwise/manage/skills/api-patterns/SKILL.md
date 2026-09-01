@@ -1,15 +1,15 @@
 ---
 name: "ConnectWise Manage API Patterns"
 description: >
-  ConnectWise PSA REST API fundamentals: public/private key + clientId
-  authentication, page/pageSize pagination, the conditions query syntax,
-  rate limiting (60/min), and error-response handling.
+  ConnectWise PSA API fundamentals as they reach the cw_* tool surface:
+  the conditions query syntax, page/pageSize pagination, rate limiting
+  (60/min), and error-response handling.
 when_to_use: >-
-  When working with authentication using public/private keys and clientId, pagination with
-  page/pageSize, conditions query syntax, rate limiting (60/min). Use when: connectwise api,
-  connectwise authentication, connectwise auth, api conditions, query builder connectwise,
-  connectwise pagination, api rate limit, connectwise rest, api error connectwise, public key
-  private key, or client id connectwise.
+  When composing a conditions query, paginating with page/pageSize, reading an error
+  response, or reasoning about the 60/min rate limit. Use when: connectwise api, api
+  conditions, query builder connectwise, connectwise pagination, api rate limit,
+  connectwise rest, or api error connectwise. Not for credentials: the MCP server
+  authenticates, and no client in this plugin constructs a ConnectWise credential.
 ---
 
 # ConnectWise PSA API Patterns
@@ -51,54 +51,18 @@ https://api-staging.connectwisedev.com/v4_6_release/apis/3.0/
 
 ## Authentication
 
-### Public/Private Key + Client ID
+**Nothing in this plugin authenticates to ConnectWise PSA.** The
+`connectwise-manage-mcp` server holds one credential set and performs every
+call; skills and commands reach the API only through its `cw_*` tools.
 
-ConnectWise PSA uses Basic Authentication with a combined credential string plus a Client ID header.
+That is why this skill documents *query syntax and response semantics* and not
+credential construction: the header a request carries is the server's concern,
+and a client that built one would be bypassing the boundary rather than using
+it.
 
-### Credential Format
-
-```
-Authorization: Basic base64({companyId}+{publicKey}:{privateKey})
-clientId: {your-client-id}
-```
-
-### Step-by-Step Authentication
-
-1. **Combine credentials:**
-   ```
-   companyId + "+" + publicKey + ":" + privateKey
-   Example: company+publickey:privatekey
-   ```
-
-2. **Base64 encode:**
-   ```
-   base64("company+publickey:privatekey") = "Y29tcGFueStwdWJsaWNrZXk6cHJpdmF0ZWtleQ=="
-   ```
-
-3. **Set headers:**
-   ```http
-   Authorization: Basic Y29tcGFueStwdWJsaWNrZXk6cHJpdmF0ZWtleQ==
-   clientId: your-registered-client-id
-   Content-Type: application/json
-   ```
-
-### Example Request
-
-```http
-GET /v4_6_release/apis/3.0/service/tickets
-Host: api-na.myconnectwise.net
-Authorization: Basic Y29tcGFueStwdWJsaWNrZXk6cHJpdmF0ZWtleQ==
-clientId: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-Content-Type: application/json
-```
-
-See [references/examples.md](references/examples.md) for a JavaScript authentication example and recommended environment variable setup.
-
-### Obtaining Credentials
-
-1. **API Member:** Create in System > Members > API Members
-2. **Public/Private Keys:** Generate for API member
-3. **Client ID:** Register at [ConnectWise Developer Portal](https://developer.connectwise.com/)
+The parts of this skill that remain useful are the ones that describe **what to
+send a tool and how to read what comes back** — the conditions grammar,
+pagination, ordering, and error semantics below.
 
 ## Conditions Query Syntax
 
@@ -196,9 +160,13 @@ Special characters must be URL-encoded:
 | `>` | `%3E` |
 | `"` | `%22` |
 
-**Example:**
+**Example** — the encoding a raw URL needs, shown so an error echoing an
+encoded string is legible. A `conditions` argument passed to a `cw_*` tool is
+**not** URL-encoded; send it as plain text:
+
 ```
-GET /service/tickets?conditions=company/id%3D12345%20and%20status/id!%3D5
+company/id%3D12345%20and%20status/id!%3D5     <- as it appears in a URL
+company/id=12345 and status/id!=5             <- as passed to conditions
 ```
 
 ## Pagination
@@ -212,32 +180,39 @@ GET /service/tickets?conditions=company/id%3D12345%20and%20status/id!%3D5
 
 ### Example Request
 
-```http
-GET /service/tickets?page=1&pageSize=100
+```
+cw_search_tickets
+  conditions: "closedFlag=false"
+  page:       1
+  pageSize:   100
 ```
 
 ### Response Headers
+
+The API sets these on a REST response. **A caller here never sees them:** the
+MCP server parses the response body and returns that, so no header reaches the
+tool result. They are documented as API knowledge, not as something to read.
 
 | Header | Description |
 |--------|-------------|
 | `Link` | Contains next/prev page URLs |
 | `X-Total-Count` | Total record count (if requested) |
 
-Paginate by incrementing `page` until the response has fewer records than
-`pageSize`. See [references/examples.md](references/examples.md) for a
-full fetch-all-pages implementation.
+`page` and `pageSize` are arguments on every `cw_search_*` and `cw_list_*`
+tool. Paginate by incrementing `page` until a page returns fewer records than
+`pageSize`. See [references/examples.md](references/examples.md) for worked
+examples against the tool surface.
 
 ### Getting Total Count
 
-```http
-GET /service/tickets?conditions=status/id!=5&pageSize=1&fields=id
-```
+**There is no count tool, and the header that would carry a total does not
+reach the caller.** Neither of the two API-level approaches — reading
+`X-Total-Count`, or a `/count` endpoint — is available through this surface.
 
-Check `X-Total-Count` header or use `/count` endpoint:
-
-```http
-GET /service/tickets/count?conditions=status/id!=5
-```
+To establish a total, page through the result with `cw_search_*` and count what
+returns, stopping when a page yields fewer records than `pageSize`. On a wide
+set that costs real requests against a 60/minute budget, so prefer narrowing
+`conditions` to answering "how many" exactly.
 
 ## Rate Limiting
 
@@ -249,6 +224,10 @@ GET /service/tickets/count?conditions=status/id!=5
 | Per API member | Yes |
 
 ### Rate Limit Headers
+
+The API sets these, and **a caller here cannot read them** for the same reason
+as the response headers above. Budget by counting your own calls rather than by
+monitoring a remaining count you have no access to.
 
 | Header | Description |
 |--------|-------------|
@@ -267,16 +246,17 @@ When rate limited, you receive HTTP 429:
 }
 ```
 
-Implement exponential backoff with jitter on 429s using the `Retry-After`
-header. See [references/examples.md](references/examples.md) for a retry
-strategy implementation.
+**The MCP server does not retry.** It issues one request and surfaces any
+non-2xx response — 429 included — as a failed tool call, so backing off is the
+caller's job. See [references/examples.md](references/examples.md) for what a
+caller should do instead.
 
 ### Best Practices for Rate Limits
 
-1. **Implement exponential backoff** - Don't hammer the API
-2. **Check headers** - Monitor remaining requests
+1. **Back off after a 429, and narrow the query** - the server will not do it for you
+2. **Count your own calls** - the remaining-requests header is not visible from here, and the 60/minute budget is shared with every other caller using the same API member
 3. **Batch operations** - Reduce total requests
-4. **Use webhooks** - Instead of polling for changes
+4. **Avoid polling loops** - a repeated wide sweep is the usual way this limit gets hit
 
 ## Error Handling
 
@@ -287,33 +267,31 @@ code table, error response format, and common error codes.
 
 ## Common API Patterns
 
-### Field Selection
-
-Request specific fields only:
-
-```http
-GET /service/tickets?fields=id,summary,status/name,company/name
-```
-
 ### Ordering
 
-```http
-GET /service/tickets?orderBy=priority/id asc, dateEntered desc
+`orderBy` is an argument on every `cw_search_*` and `cw_list_*` tool:
+
+```
+cw_search_tickets
+  conditions: "closedFlag=false"
+  orderBy:    "priority/id asc, dateEntered desc"
 ```
 
-### Child Collections
+### Field selection, child collections and custom fields
 
-Include child records:
+The API supports `fields`, `childconditions` and `customFieldConditions` as
+query parameters. **None is exposed as a tool argument**, so from here a search
+returns the server's field set and cannot be filtered to a projection or
+constrained on a child collection. The parameters are recorded because they
+explain what the API can do, not because they can be sent:
 
-```http
-GET /service/tickets?childconditions=notes/text contains "update"
-```
+| Parameter | Effect | Available here |
+|-----------|--------|----------------|
+| `fields` | Return a projection only | No |
+| `childconditions` | Filter on a child collection, e.g. `notes/text contains "update"` | No |
+| `customFieldConditions` | Filter on a custom field | No |
 
-### Custom Fields
-
-```http
-GET /service/tickets?customFieldConditions=customField1 contains "value"
-```
+Filter with `conditions` and read the fields you need from the returned record.
 
 ## Webhook Configuration
 

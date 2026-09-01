@@ -10,71 +10,58 @@ Update fields on an existing ConnectWise ticket including status, priority, boar
 
 ## Prerequisites
 
-- Valid ConnectWise PSA API credentials configured
-- User must have ticket update permissions
-- Target status/board must be valid for current ticket context
+- The `connectwise-manage-mcp` server is configured and reachable
+- The server's API member must hold ticket update permissions
+- Ticket must exist and be accessible
+
+## Tools used
+
+| Step | Tool |
+|------|------|
+| Read current state | `cw_get_ticket` |
+| Resolve status | `cw_list_statuses` |
+| Resolve priority | `cw_list_priorities` |
+| Resolve board | `cw_list_boards` |
+| Resolve owner | `cw_search_members` |
+| Apply the update | `cw_update_ticket` |
 
 ## Steps
 
 1. **Validate ticket exists**
-   ```http
-   GET /service/tickets/{id}
-   ```
-   - Confirm ticket is accessible
-   - Get current board ID for status validation
+   - `cw_get_ticket` with `id=<ticket_id>`
+   - Capture the current board ID; status, type and subtype are all board-scoped
 
 2. **Resolve field values to IDs**
+   - `cw_list_statuses` with `boardId=<board_id>` — match the requested status by name
+   - `cw_list_priorities` — match by name
+   - `cw_list_boards` — match by name, when moving the ticket
+   - `cw_search_members` with `conditions=identifier="<owner>"` — resolve the owner
 
-   If status provided:
-   ```http
-   GET /service/boards/{boardId}/statuses?conditions=name='{status}'
+   Resolve against the **destination** board when moving and changing status in
+   one call: a status ID from the old board is not valid on the new one.
+
+3. **Build the patch operations**
+
+   `cw_update_ticket` takes JSON Patch operations, so one call carries every
+   field being changed:
+
+   ```
+   cw_update_ticket
+     id:         <ticket_id>
+     operations: [
+       {"op": "replace", "path": "status/id",   "value": <status_id>},
+       {"op": "replace", "path": "priority/id", "value": <priority_id>},
+       {"op": "replace", "path": "board/id",    "value": <board_id>},
+       {"op": "replace", "path": "owner/id",    "value": <member_id>},
+       {"op": "replace", "path": "summary",     "value": "<summary>"}
+     ]
    ```
 
-   If priority provided:
-   ```http
-   GET /service/priorities?conditions=name contains '{priority}'
-   ```
+   Include only the paths the caller asked to change. Grouping related changes
+   into one call keeps the update atomic — two calls can leave the ticket on a
+   new board with a status from the old one.
 
-   If board provided:
-   ```http
-   GET /service/boards?conditions=name='{board}'
-   ```
-
-   If owner provided:
-   ```http
-   GET /system/members?conditions=identifier='{owner}'
-   ```
-
-   If type provided:
-   ```http
-   GET /service/boards/{boardId}/types?conditions=name='{type}'
-   ```
-
-   If subtype provided:
-   ```http
-   GET /service/boards/{boardId}/subtypes?conditions=name='{subtype}'
-   ```
-
-3. **Build patch payload**
-   ```json
-   [
-     {"op": "replace", "path": "/status/id", "value": <status_id>},
-     {"op": "replace", "path": "/priority/id", "value": <priority_id>},
-     {"op": "replace", "path": "/board/id", "value": <board_id>},
-     {"op": "replace", "path": "/owner/id", "value": <owner_id>},
-     {"op": "replace", "path": "/type/id", "value": <type_id>},
-     {"op": "replace", "path": "/subType/id", "value": <subtype_id>},
-     {"op": "replace", "path": "/summary", "value": "<summary>"}
-   ]
-   ```
-
-4. **Apply update**
-   ```http
-   PATCH /service/tickets/{id}
-   Content-Type: application/json
-   ```
-
-5. **Return updated ticket summary**
+4. **Return updated ticket summary**
 
 ## Parameters
 
@@ -84,8 +71,8 @@ Update fields on an existing ConnectWise ticket including status, priority, boar
 | status | string | No | - | New status name |
 | priority | string/int | No | - | Priority name or 1-4 |
 | board | string | No | - | Target service board name |
-| type | string | No | - | Ticket type name |
-| subtype | string | No | - | Ticket subtype name |
+| type | string | No | - | **Unavailable** — see below |
+| subtype | string | No | - | **Unavailable** — see below |
 | owner | string | No | - | Member identifier to assign |
 | summary | string | No | - | New ticket summary/title |
 
@@ -125,12 +112,6 @@ Update fields on an existing ConnectWise ticket including status, priority, boar
 /update-ticket 12345 --status "In Progress" --priority 2 --owner jsmith
 ```
 
-### Change Type and Subtype
-
-```
-/update-ticket 12345 --type "Incident" --subtype "Hardware"
-```
-
 ### Update Summary
 
 ```
@@ -140,7 +121,7 @@ Update fields on an existing ConnectWise ticket including status, priority, boar
 ### Full Update
 
 ```
-/update-ticket 12345 --status "In Progress" --priority 1 --owner jsmith --board "Escalations" --type "Incident" --summary "Critical: Email outage affecting all users"
+/update-ticket 12345 --status "In Progress" --priority 1 --owner jsmith --board "Escalations" --summary "Critical: Email outage affecting all users"
 ```
 
 ## Output
@@ -185,27 +166,6 @@ Current State:
   Priority: High (2)
 
 URL: https://na.myconnectwise.net/v4_6_release/services/system_io/Service/fv_sr100_request.rails?service_recid=12345
-```
-
-## API Authentication
-
-```bash
-# Base64 encode credentials: company+publicKey:privateKey
-AUTH=$(echo -n "${CW_COMPANY}+${CW_PUBLIC_KEY}:${CW_PRIVATE_KEY}" | base64)
-
-# Build JSON patch payload
-PATCH_DATA='[
-  {"op": "replace", "path": "/status/id", "value": 2},
-  {"op": "replace", "path": "/priority/id", "value": 1}
-]'
-
-# Make API request
-curl -s -X PATCH \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/service/tickets/${TICKET_ID}" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json" \
-  -d "${PATCH_DATA}"
 ```
 
 ## Error Handling
@@ -280,8 +240,6 @@ Please provide at least one field to update:
   --priority   - Change priority level
   --board      - Move to different board
   --owner      - Reassign ticket
-  --type       - Change ticket type
-  --subtype    - Change ticket subtype
   --summary    - Update ticket summary
 
 Example: /update-ticket 12345 --status "In Progress"
@@ -305,10 +263,20 @@ Updating a closed ticket may affect reporting.
 Proceed with update? [Y/n]
 ```
 
-## Related Commands
+## Not available through the tool surface
 
-- `/get-ticket` - View ticket details
-- `/add-note` - Add note to ticket
-- `/close-ticket` - Close the ticket
-- `/log-time` - Log time against ticket
-- `/search-tickets` - Search for tickets
+| Requested | Would need |
+|-----------|------------|
+| `type` — ticket type | A board type tool. Types are board-scoped and nothing in the surface lists them |
+| `subtype` — ticket subtype | A board subtype tool, for the same reason |
+
+Both were resolvable by name in the original command. **They are not now**, and
+the `--type` / `--subtype` arguments cannot be honoured. Report that plainly
+rather than guessing an ID: type and subtype drive board workflow and reporting
+categorisation, so a wrong guess is silently miscategorised work.
+
+A caller who knows the numeric ID can still set it, because
+`cw_update_ticket` takes an arbitrary JSON Patch path — but **the ID has to come
+from the operator**, not from this command.
+
+## Related Commands
