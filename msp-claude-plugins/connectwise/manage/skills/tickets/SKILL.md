@@ -13,7 +13,7 @@ when_to_use: >-
 
 # ConnectWise PSA Ticket Management
 
-Tickets are the core unit of service delivery in ConnectWise PSA. Every client request, incident, and change flows through `POST /service/tickets`. This skill covers creating, searching, updating, and closing tickets with proper SLA handling.
+Tickets are the core unit of service delivery in ConnectWise PSA. Every client request, incident, and change becomes a service ticket, created through `cw_create_ticket`. This skill covers creating, searching, updating, and closing tickets with proper SLA handling.
 
 > For complete field definitions see [FIELDS.md](./FIELDS.md). For status values, priorities, SLA tables, and note types see [REFERENCE.md](./REFERENCE.md).
 
@@ -34,57 +34,64 @@ Tickets are the core unit of service delivery in ConnectWise PSA. Every client r
 
 ## Core API Operations
 
+Every operation below runs through a `connectwise-manage-mcp` tool. The
+endpoint each one corresponds to is named for orientation only — it is not a
+route this plugin calls.
+
 ### Create a Ticket
 
-```http
-POST /service/tickets
-Content-Type: application/json
-
-{
-  "summary": "Unable to access email - multiple users affected",
-  "board": {"id": 1},
-  "company": {"id": 12345},
-  "contact": {"id": 67890},
-  "priority": {"id": 2},
-  "status": {"name": "New"},
-  "initialDescription": "Sales team (5 users) reporting Outlook disconnected since 9am. Webmail working."
-}
+```
+cw_create_ticket
+  summary:            "Unable to access email - multiple users affected"
+  boardId:            1
+  companyId:          12345
+  contactId:          67890
+  priorityId:         2
+  initialDescription: "Sales team (5 users) reporting Outlook disconnected since 9am."
 ```
 
-Required fields: `summary`, `board`, `company`. Use `initialDescription` for the first note with full details.
+Only `summary` is required, and the tool takes resolved numeric IDs rather than
+nested objects. Use `initialDescription` for the first note with full details.
 
 ### Get / Update a Ticket
 
-```http
-GET /service/tickets/{id}
+```
+cw_get_ticket  id: 54321
 ```
 
-```http
-PATCH /service/tickets/{id}
-Content-Type: application/json
-
-{"status": {"name": "In Progress"}, "owner": {"id": 123}}
+```
+cw_update_ticket
+  id: 54321
+  operations: [
+    {"op": "replace", "path": "status/name", "value": "In Progress"},
+    {"op": "replace", "path": "owner/id",    "value": 123}
+  ]
 ```
 
 ### Add a Note
 
-```http
-POST /service/tickets/{ticketId}/notes
-Content-Type: application/json
-
-{
-  "text": "Identified the issue as a DNS configuration problem.",
-  "internalAnalysisFlag": true,
-  "resolutionFlag": false
-}
+```
+cw_add_ticket_note
+  id:                   54321
+  text:                 "Identified the issue as a DNS configuration problem."
+  internalAnalysisFlag: true
 ```
 
-Set `resolutionFlag: true` for resolution notes visible to the customer on close.
+Set `resolutionFlag: true` for resolution notes, and `customerUpdatedFlag: true`
+for notes the customer should see on the portal.
 
 ### Search Tickets
 
-```http
-GET /service/tickets?conditions=company/id=12345 and status/name!="Closed"&orderBy=priority/id asc
+```
+cw_search_tickets
+  conditions: "company/id=12345 and status/name!=\"Closed\""
+  orderBy:    "priority/id asc"
+```
+
+### Read Notes
+
+```
+cw_get_ticket_notes  id: 54321
 ```
 
 ## Common Query Patterns
@@ -108,25 +115,37 @@ conditions=resources contains "jsmith" and closedFlag=false
 
 ## Workflow: Ticket Closure with Validation
 
-Follow these checkpoints before closing any ticket:
+**There is no close tool.** Closure is composed, and each checkpoint is a
+separate call:
 
-1. **Verify resolution exists** — `GET /service/tickets/{id}` and confirm `resolution` field is populated. If empty, add a resolution note first (`resolutionFlag: true`).
-2. **Check time entries** — `GET /time/entries?conditions=chargeToId={id} and chargeToType="ServiceTicket"`. Ensure all work is logged.
-3. **Confirm status is Completed** — Tickets must pass through `Completed` before `Closed`. Set status to `Completed` first if still `In Progress` or waiting.
-4. **Close the ticket:**
-   ```http
-   PATCH /service/tickets/{id}
-   Content-Type: application/json
+1. **Verify resolution exists** — `cw_get_ticket` and confirm the `resolution`
+   field is populated. If empty, add a resolution note first with
+   `cw_add_ticket_note` and `resolutionFlag: true`.
+2. **Check time entries** — `cw_search_time_entries` with
+   `conditions=chargeToId=54321 and chargeToType="ServiceTicket"`. Ensure all
+   work is logged.
+3. **Confirm status is Completed** — tickets must pass through `Completed`
+   before `Closed`. Resolve valid statuses with `cw_list_statuses` for the
+   ticket's board.
+4. **Close the ticket** —
 
-   {
-     "status": {"name": "Closed"},
-     "closedFlag": true,
-     "resolution": "DNS records corrected; email service restored for all affected users."
-   }
    ```
-5. **Validate closure** — `GET /service/tickets/{id}` and confirm `closedFlag: true` and `closedDate` is populated.
+   cw_update_ticket
+     id: 54321
+     operations: [
+       {"op": "replace", "path": "status/id",  "value": <closed_status_id>},
+       {"op": "replace", "path": "resolution", "value": "DNS records corrected."}
+     ]
+   ```
 
-> If any checkpoint fails, stop and resolve the issue before proceeding. Closing without a resolution note will leave the ticket incomplete in reports.
+5. **Validate closure** — `cw_get_ticket` and confirm `closedFlag: true` and
+   `closedDate` is populated.
+
+> If any checkpoint fails, stop and resolve the issue before proceeding.
+> Closing without a resolution note leaves the ticket incomplete in reports.
+> These are five separate calls rather than one transaction, so a failure part
+> way through leaves the ticket in whatever state the last successful call put
+> it — report which steps completed.
 
 ## Best Practices
 
