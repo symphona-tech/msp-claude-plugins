@@ -46,8 +46,10 @@ Base: /company/companies
 | `cw_create_company` | Create a company |
 | `cw_update_company` | JSON Patch update |
 
-There is **no delete tool**, and no tool for company sites or custom fields —
-see [Not available through the tool surface](#not-available-through-the-tool-surface).
+There is **no delete tool**, and no tool addressing company sites or custom
+fields directly — though custom field *values* come back on the record from
+`cw_get_company`. See
+[Not available through the tool surface](#not-available-through-the-tool-surface).
 
 ## Company Types
 
@@ -61,7 +63,7 @@ Standard company types in ConnectWise PSA:
 | 4 | Partner | Strategic partner |
 | 5 | Competitor | Market competitor |
 
-**Note:** Company types are configurable. Query `/company/companies/types` for your instance's types.
+**Note:** Company types are configurable, so treat the table above as illustrative rather than authoritative. No tool enumerates company types; confirm your instance's types in the PSA and filter with `cw_search_companies` on `type/name` once you know them.
 
 ## Company Statuses
 
@@ -194,9 +196,10 @@ Custom fields store company-specific data not in standard fields.
 
 ### Custom field structure
 
-**No tool reads or writes custom fields.** They appear on a company record as a
-`customFields` array when the record is fetched with `cw_get_company`, and are
-read-only from this plugin's perspective.
+**Custom fields are readable but not writable.** No tool addresses them
+directly, but they are returned as a `customFields` array on the company record
+that `cw_get_company` fetches, so their values can be read. Nothing on this
+surface sets or clears one.
 
 ### Custom Field Response
 
@@ -353,7 +356,7 @@ Companies can have hierarchical relationships. A child company carries a
 |-----------|------------|
 | Deleting a company | A delete tool. **The surface exposes none** — `GOVERNANCE.md` records the Delete group as empty |
 | Company sites (`/company/companies/{id}/sites`) | A sites tool |
-| Custom field read or update | A custom-fields tool |
+| Setting or clearing a custom field | A custom-fields tool. Reading works — values arrive on the record from `cw_get_company` |
 
 The sites and custom-field sections above are retained as **domain knowledge**:
 they describe how ConnectWise models this data, which is useful when reading a
