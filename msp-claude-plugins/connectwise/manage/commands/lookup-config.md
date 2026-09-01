@@ -119,7 +119,6 @@ Found 5 configuration items matching "ACME"
 
 Quick Actions:
 - View details: /lookup-config <name>
-- Link to ticket: /update-ticket <ticket_id> --config <config_id>
 ```
 
 ### Detailed View (Single Result)
@@ -297,7 +296,7 @@ ConnectWise instance, and any given instance may differ.
 
 ## Related Commands
 
-- `/get-ticket` - View ticket with linked configurations
+- `/get-ticket` - View ticket details (ticket-linked configurations are not retrievable)
 - `/create-ticket` - Create ticket and link configuration
 - `/check-agreement` - View agreement for configuration coverage
 - `/search-tickets` - Find tickets by configuration
