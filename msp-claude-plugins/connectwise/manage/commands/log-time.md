@@ -22,6 +22,7 @@ Log a time entry against a ConnectWise ticket.
 | Resolve the member | `cw_search_members` |
 | Check agreement coverage | `cw_search_agreements` |
 | Create the entry | `cw_create_time_entry` |
+| Total time already on the ticket | `cw_search_time_entries` |
 
 ## Steps
 
@@ -65,6 +66,10 @@ Log a time entry against a ConnectWise ticket.
    treat it as a billing action and confirm before creating one.
 
 6. **Return confirmation with totals**
+   - `cw_search_time_entries` with
+     `conditions=chargeToId=<ticket_id> and chargeToType="ServiceTicket"`
+   - Sum `actualHours` across the result for the ticket total. Without this call
+     there is no source for a previous or total figure — do not estimate one.
 
 ## Parameters
 
@@ -122,12 +127,6 @@ Time Details:
   End:        2026-02-04 10:30
   Duration:   1.5 hours
 
-Billing:
-  Work Type:  Remote Support
-  Work Role:  Engineer
-  Rate:       $150.00/hour
-  Amount:     $225.00
-
 Notes:
 "Troubleshot network connectivity issues. Identified DNS misconfiguration."
 
@@ -181,7 +180,7 @@ Supported formats:
 - YYYY-MM-DDTHH:MM:SS (e.g., 2026-02-04T09:00:00)
 - "now" (current time)
 
-Example: /log-time 12345 "2026-02-04 09:00" --actual_hours 1.5
+Example: /log-time 12345 jtech "2026-02-04 09:00" --actual_hours 1.5
 ```
 
 ### Missing Duration
@@ -190,8 +189,8 @@ Example: /log-time 12345 "2026-02-04 09:00" --actual_hours 1.5
 Error: Either time_end or actual_hours is required
 
 Examples:
-  /log-time 12345 "2026-02-04 09:00" "2026-02-04 10:30"
-  /log-time 12345 "2026-02-04 09:00" --actual_hours 1.5
+  /log-time 12345 jtech "2026-02-04 09:00" "2026-02-04 10:30"
+  /log-time 12345 jtech "2026-02-04 09:00" --actual_hours 1.5
 ```
 
 ### End Before Start
@@ -220,10 +219,9 @@ Log future time entry? [Y/n]
 ```
 Warning: No active agreement for Acme Corporation
 
-Time will be billed at Time & Materials rates.
-Work Type: Remote Support
-Rate: $175.00/hour
-Estimated: $262.50
+Time will be billed at whatever rate the board and agreement defaults apply.
+This command cannot resolve a work type, a work role or a rate, so it cannot
+estimate a cost.
 
 Proceed? [Y/n]
 ```
@@ -240,7 +238,6 @@ Overage:   1.0 hours (billed at T&M rates)
 
 Proceed? [Y/n]
 Split entry? [s] (0.5h covered, 1.0h T&M)
-Mark as non-billable? [n]
 ```
 
 ### Closed Ticket Warning
