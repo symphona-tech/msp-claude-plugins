@@ -151,8 +151,9 @@ A returned entry carries `billableOption`, `actualHours`, `hoursBilled`,
 
 ## Charge Codes
 
-Charge codes are used for non-ticket time (meetings, training, etc.). Query
-`GET /time/chargeCodes` for the configured list.
+Charge codes are used for non-ticket time (meetings, training, etc.). **No tool
+enumerates them**, so the table below is illustrative rather than a validated
+list for your instance; confirm the codes configured in the PSA.
 
 | Code | Description | Billable |
 |------|-------------|----------|
@@ -165,7 +166,7 @@ Charge codes are used for non-ticket time (meetings, training, etc.). Query
 
 ## Gotchas
 
-- **Billed time entries cannot be deleted.** `DELETE /time/entries/{id}` fails once `status` is `Billed`; you must adjust the invoice instead.
+- **Billed time entries cannot be deleted.** The API rejects a delete once `status` is `Billed`, and the invoice has to be adjusted instead. No delete tool is exposed here in any case, billed or not.
 - **`company` is required for `ChargeCode` entries only.** `ServiceTicket`/`ProjectTicket` entries infer the company from the ticket.
 - **`billableOption` on the time entry wins over ticket/agreement defaults** — see billing precedence above. A blank or `NoDefault` value falls through to the ticket, then the agreement, then the company.
 - Time sheets and time entries use different status vocabularies. Time sheets go `Open -> Submitted -> Approved/Rejected`; time entries go `Open -> Approved/Rejected -> Billed` (no `Submitted` state). Approving a time sheet does not retroactively change the `status` of every entry inside it. See [references/api.md](references/api.md) for both status tables.

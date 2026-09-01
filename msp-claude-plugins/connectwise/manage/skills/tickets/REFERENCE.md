@@ -54,7 +54,7 @@ Lower number = higher priority. **Priority 1 is the most urgent** (opposite to s
 
 ## Service Boards
 
-Boards organize tickets by type and workflow. Query available boards: `GET /service/boards`.
+Boards organize tickets by type and workflow. List them with `cw_list_boards`.
 
 | Board | Purpose | Typical Flow |
 |-------|---------|--------------|
