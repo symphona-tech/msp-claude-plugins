@@ -29,11 +29,25 @@ Companies in ConnectWise PSA represent your clients, prospects, vendors, and oth
   billing account licences are bought against; neither shares an ID
   with the PSA. Use `hudu-companies` or `pax8-companies`.
 
-## API Endpoint
+## Tool surface
+
+Companies are reached through `connectwise-manage-mcp`, never by direct REST.
+The endpoint below is named for orientation only — it is not a route this
+plugin calls.
 
 ```
 Base: /company/companies
 ```
+
+| Tool | Purpose |
+|------|---------|
+| `cw_search_companies` | Search with CW conditions syntax |
+| `cw_get_company` | Fetch one company by ID |
+| `cw_create_company` | Create a company |
+| `cw_update_company` | JSON Patch update |
+
+There is **no delete tool**, and no tool for company sites or custom fields —
+see [Not available through the tool surface](#not-available-through-the-tool-surface).
 
 ## Company Types
 
@@ -158,19 +172,19 @@ Sites represent physical locations for a company. Each company can have multiple
 | `taxCode` | object | No | `{id: taxCodeId}` |
 | `defaultFlag` | boolean | No | Is primary site |
 
-### Create Site
+### Site structure
 
-```http
-POST /company/companies/{companyId}/sites
-Content-Type: application/json
+**No tool creates or reads sites.** The shape below documents how ConnectWise
+models a site, for reading a company record that references one:
 
+```json
 {
   "name": "Main Office",
-  "addressLine1": "123 Main Street",
+  "addressLine1": "123 Main St",
   "city": "Springfield",
   "state": "IL",
   "zip": "62701",
-  "defaultFlag": true
+  "primaryAddressFlag": true
 }
 ```
 
@@ -178,11 +192,11 @@ Content-Type: application/json
 
 Custom fields store company-specific data not in standard fields.
 
-### Get Custom Fields
+### Custom field structure
 
-```http
-GET /company/companies/{companyId}/customFields
-```
+**No tool reads or writes custom fields.** They appear on a company record as a
+`customFields` array when the record is fetched with `cw_get_company`, and are
+read-only from this plugin's perspective.
 
 ### Custom Field Response
 
@@ -195,23 +209,12 @@ GET /company/companies/{companyId}/customFields
 }
 ```
 
-### Update Custom Fields
+### Custom field values
 
-Custom fields are updated via the company PATCH:
-
-```http
-PATCH /company/companies/{id}
-Content-Type: application/json
-
-{
-  "customFields": [
-    {
-      "id": 1,
-      "value": "Platinum"
-    }
-  ]
-}
-```
+Custom field values cannot be set through the tool surface. `cw_update_company`
+takes JSON Patch operations against the company record; whether a given custom
+field is reachable that way is **not established** by the tool's schema, and
+guessing a patch path against a live company record is not worth the risk.
 
 ### Custom Field Types
 
@@ -223,65 +226,54 @@ Content-Type: application/json
 | `Checkbox` | Boolean true/false |
 | `Dropdown` | Selection from list |
 
-## API Operations
-
-### Create Company
-
-```http
-POST /company/companies
-Content-Type: application/json
-
-{
-  "identifier": "ACME",
-  "name": "Acme Corporation",
-  "status": {"id": 1},
-  "type": {"id": 1},
-  "addressLine1": "123 Main Street",
-  "city": "Springfield",
-  "state": "IL",
-  "zip": "62701",
-  "phoneNumber": "555-123-4567",
-  "website": "https://www.acme.com"
-}
-```
-
-### Get Company
-
-```http
-GET /company/companies/{id}
-```
-
-### Get Company by Identifier
-
-```http
-GET /company/companies?conditions=identifier="ACME"
-```
-
-### Update Company
-
-```http
-PATCH /company/companies/{id}
-Content-Type: application/json
-
-{
-  "phoneNumber": "555-987-6543",
-  "status": {"id": 1}
-}
-```
+## Tool Operations
 
 ### Search Companies
 
-```http
-GET /company/companies?conditions=name contains "Acme" and status/id=1
+```
+cw_search_companies
+  conditions: "status/name=\"Active\" and territory/id=1"
+  orderBy:    "name asc"
+  pageSize:   100
 ```
 
-### Delete Company
+### Get a Company
 
-```http
-DELETE /company/companies/{id}
+```
+cw_get_company  id: 12345
 ```
 
-**Note:** Deleting a company with related records (tickets, contacts, etc.) will fail. Use status change to Inactive instead.
+To find one by identifier rather than ID, search for it:
+
+```
+cw_search_companies  conditions: "identifier=\"ACME\""
+```
+
+### Create a Company
+
+```
+cw_create_company
+  name:       "Acme Corporation"
+  identifier: "ACME"
+```
+
+Check the tool's input schema for the fields it accepts. The field reference
+above documents the full ConnectWise model, which is **wider than the tool's
+arguments** — a field appearing there is not a guarantee the tool can set it.
+
+### Update a Company
+
+```
+cw_update_company
+  id: 12345
+  operations: [
+    {"op": "replace", "path": "status/id", "value": 2},
+    {"op": "replace", "path": "phoneNumber", "value": "555-0100"}
+  ]
+```
+
+`replace` overwrites. To append to a field, read it with `cw_get_company` first
+and send the concatenated value.
 
 ## Common Query Patterns
 
@@ -320,11 +312,10 @@ conditions=market/id=3
 
 ### Parent/Child Companies
 
-Companies can have hierarchical relationships:
-
-```http
-GET /company/companies/{id}/managedDevicesIntegrations
-```
+Companies can have hierarchical relationships. A child company carries a
+`parentCompany` reference on its own record, so the hierarchy is readable from
+`cw_get_company` without a separate call. There is no tool for the
+`managedDevicesIntegrations` collection.
 
 ### Related Entities
 
@@ -356,8 +347,19 @@ GET /company/companies/{id}/managedDevicesIntegrations
 | Cannot delete | Has related records | Set status to Inactive instead |
 | Invalid status | Status doesn't exist | Query statuses endpoint |
 
-## Related Skills
+## Not available through the tool surface
 
-- [ConnectWise Contacts](../contacts/SKILL.md) - Contact management
-- [ConnectWise Tickets](../tickets/SKILL.md) - Service tickets
-- [ConnectWise API Patterns](../api-patterns/SKILL.md) - Query syntax and auth
+| Operation | Would need |
+|-----------|------------|
+| Deleting a company | A delete tool. **The surface exposes none** — `GOVERNANCE.md` records the Delete group as empty |
+| Company sites (`/company/companies/{id}/sites`) | A sites tool |
+| Custom field read or update | A custom-fields tool |
+
+The sites and custom-field sections above are retained as **domain knowledge**:
+they describe how ConnectWise models this data, which is useful when reading a
+company record. **They are not workflows this plugin can execute.**
+
+Company deletion is not merely unavailable here — it is absent from the whole
+inventoried surface, so no amount of configuration exposes it.
+
+## Related Skills
