@@ -220,19 +220,6 @@ Agreement Additions
 Total Additions: $800.00/month recurring + $1,250.00 one-time
 
 ================================================================================
-Recent Usage (Last 30 Days)
-================================================================================
-
-| Date       | Ticket   | Hours | Work Type       | Technician |
-|------------|----------|-------|-----------------|------------|
-| 2026-02-04 | #54321   | 1.5   | Remote Support  | J. Smith   |
-| 2026-02-03 | #54320   | 2.0   | Remote Support  | J. Smith   |
-| 2026-02-01 | #54310   | 0.5   | Phone Support   | M. Johnson |
-| 2026-01-30 | #54305   | 3.0   | On-site Support | J. Smith   |
-
-Last 30 Days Total: 7.0 hours
-
-================================================================================
 ```
 
 ## Error Handling
@@ -327,6 +314,7 @@ Recommend initiating renewal discussion with customer.
 |-----------|------------|
 | Covered work types | An agreement work type tool |
 | Covered work roles | An agreement work role tool |
+| Recent usage against the agreement | A way to scope time entries to an agreement. `cw_search_time_entries` charges to a ticket, and this command does not resolve the agreement's tickets |
 
 The original command reported which work types and roles an agreement covers.
 **Neither is retrievable**, so a coverage answer built from this command is

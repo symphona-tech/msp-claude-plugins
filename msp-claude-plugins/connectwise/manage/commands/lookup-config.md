@@ -167,10 +167,6 @@ Installed Software:
   - SQL Server 2019 Standard
   - Veeam Agent
 
-Related Tickets (last 30 days):
-  #54321 - Server slow response (Closed)
-  #54100 - Disk space warning (Closed)
-
 Created:        2024-01-15 by Admin
 Last Updated:   2026-02-01
 
@@ -213,7 +209,7 @@ You can also filter by type and status:
 ```
 Error: Company ID 99999 not found
 
-Use /search-company to find the correct company ID.
+Re-run with a more precise company name, or pass the company ID directly.
 ```
 
 ### Too Many Results
@@ -254,6 +250,7 @@ Contact your ConnectWise administrator.
 |-----------|------------|
 | Validating a `--type` against the configured list | A configuration type tool |
 | Validating a `--status` against the configured list | A configuration status tool |
+| Tickets related to a configuration | A tool exposing the ticket-configuration association. Neither side is queryable by the other |
 
 Neither list can be enumerated, so a name the caller supplies **cannot be
 checked before it is used**. Filter on it directly in the conditions string —
@@ -297,6 +294,6 @@ ConnectWise instance, and any given instance may differ.
 ## Related Commands
 
 - `/get-ticket` - View ticket details (ticket-linked configurations are not retrievable)
-- `/create-ticket` - Create ticket and link configuration
+- `/create-ticket` - Create a ticket for the same company. It cannot link a configuration to the ticket; no tool exposes that association
 - `/check-agreement` - View agreement for configuration coverage
-- `/search-tickets` - Find tickets by configuration
+- `/search-tickets` - Search tickets for the same company. It cannot filter by configuration, for the same reason
