@@ -160,9 +160,13 @@ Special characters must be URL-encoded:
 | `>` | `%3E` |
 | `"` | `%22` |
 
-**Example:**
+**Example** — the encoding a raw URL needs, shown so an error echoing an
+encoded string is legible. A `conditions` argument passed to a `cw_*` tool is
+**not** URL-encoded; send it as plain text:
+
 ```
-GET /service/tickets?conditions=company/id%3D12345%20and%20status/id!%3D5
+company/id%3D12345%20and%20status/id!%3D5     <- as it appears in a URL
+company/id=12345 and status/id!=5             <- as passed to conditions
 ```
 
 ## Pagination
@@ -176,8 +180,11 @@ GET /service/tickets?conditions=company/id%3D12345%20and%20status/id!%3D5
 
 ### Example Request
 
-```http
-GET /service/tickets?page=1&pageSize=100
+```
+cw_search_tickets
+  conditions: "closedFlag=false"
+  page:       1
+  pageSize:   100
 ```
 
 ### Response Headers
@@ -260,33 +267,31 @@ code table, error response format, and common error codes.
 
 ## Common API Patterns
 
-### Field Selection
-
-Request specific fields only:
-
-```http
-GET /service/tickets?fields=id,summary,status/name,company/name
-```
-
 ### Ordering
 
-```http
-GET /service/tickets?orderBy=priority/id asc, dateEntered desc
+`orderBy` is an argument on every `cw_search_*` and `cw_list_*` tool:
+
+```
+cw_search_tickets
+  conditions: "closedFlag=false"
+  orderBy:    "priority/id asc, dateEntered desc"
 ```
 
-### Child Collections
+### Field selection, child collections and custom fields
 
-Include child records:
+The API supports `fields`, `childconditions` and `customFieldConditions` as
+query parameters. **None is exposed as a tool argument**, so from here a search
+returns the server's field set and cannot be filtered to a projection or
+constrained on a child collection. The parameters are recorded because they
+explain what the API can do, not because they can be sent:
 
-```http
-GET /service/tickets?childconditions=notes/text contains "update"
-```
+| Parameter | Effect | Available here |
+|-----------|--------|----------------|
+| `fields` | Return a projection only | No |
+| `childconditions` | Filter on a child collection, e.g. `notes/text contains "update"` | No |
+| `customFieldConditions` | Filter on a custom field | No |
 
-### Custom Fields
-
-```http
-GET /service/tickets?customFieldConditions=customField1 contains "value"
-```
+Filter with `conditions` and read the fields you need from the returned record.
 
 ## Webhook Configuration
 
