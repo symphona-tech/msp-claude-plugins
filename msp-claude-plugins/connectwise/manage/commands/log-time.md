@@ -1,7 +1,7 @@
 ---
 description: Log a time entry against a ConnectWise PSA ticket
-argument-hint: "<ticket_id> <time_start> [time_end] [actual_hours] [notes] [billable] [work_type] [work_role]"
-arguments: [ticket_id, time_start, time_end, actual_hours, notes, billable, work_type, work_role]
+argument-hint: "<ticket_id> <member> <time_start> [time_end] [actual_hours] [notes]"
+arguments: [ticket_id, member, time_start, time_end, actual_hours, notes]
 ---
 
 # Log Time to ConnectWise PSA Ticket
@@ -32,16 +32,19 @@ Log a time entry against a ConnectWise ticket.
 2. **Resolve the member**
    - `cw_search_members` with `conditions=identifier="<member>"`
    - `memberId` is **required** by `cw_create_time_entry` and is not inferred
-     from the caller — the server authenticates as one API member, which is not
-     necessarily the technician the time belongs to
+     from the caller. The server authenticates as one API member, which is not
+     the technician the time belongs to.
+   - **If `member` was not supplied, stop and ask.** Never fall back to the API
+     member the server authenticates as: that attributes billable work to a
+     shared service account and misstates who did it.
 
 3. **Calculate time values**
    - `timeStart` is required; supply `timeEnd` or `actualHours`
    - Both are ISO 8601
 
-4. **Check agreement coverage (if billable)**
+4. **Check agreement coverage**
    - `cw_search_agreements` with
-     `conditions=company/id=<company_id> and cancelledFlag=false`
+     `conditions=company/id=<company_id> and cancelledFlag=false and (endDate >= [<today>] or endDate = null)`
    - Warn when the entry would exceed remaining covered hours
 
 5. **Create the time entry**
@@ -50,7 +53,7 @@ Log a time entry against a ConnectWise ticket.
    cw_create_time_entry
      chargeToType:  "ServiceTicket"
      chargeToId:    <ticket_id>
-     memberId:      <member_id>
+     memberId:      <resolved_member_id>
      timeStart:     "<ISO 8601>"
      timeEnd:       "<ISO 8601>"
      notes:         "<work notes>"
@@ -58,8 +61,8 @@ Log a time entry against a ConnectWise ticket.
    ```
 
    `chargeToType`, `chargeToId`, `memberId` and `timeStart` are all required.
-   **A time entry against a ticket lands on the customer's next invoice** — treat
-   it as a billing action and confirm before creating one.
+   **A time entry against a ticket lands on the customer's next invoice** —
+   treat it as a billing action and confirm before creating one.
 
 6. **Return confirmation with totals**
 
@@ -67,53 +70,40 @@ Log a time entry against a ConnectWise ticket.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| ticket_id | integer | Yes | - | Ticket ID to log time against |
-| time_start | datetime | Yes | - | Start time (YYYY-MM-DD HH:MM or "now") |
-| time_end | datetime | No* | - | End time |
-| actual_hours | decimal | No* | - | Hours worked (alternative to time_end) |
-| notes | string | No | - | Work description |
-| billable | string | No | Billable | Billable, DoNotBill, NoCharge |
-| work_type | string | No | - | **Unavailable** — see below |
-| work_role | string | No | - | **Unavailable** — see below |
+| ticket_id | integer | Yes | - | ConnectWise ticket ID |
+| member | string | Yes | - | Member identifier the time belongs to |
+| time_start | string | Yes | - | Start time (ISO 8601, or "now") |
+| time_end | string | No | - | End time (ISO 8601) |
+| actual_hours | number | No | - | Hours worked, as an alternative to time_end |
+| notes | string | No | - | Work notes, visible to the customer |
 
-*Either `time_end` or `actual_hours` is required
+**There is no `billable` parameter, and no work type or work role.** None of the
+three can be expressed through `cw_create_time_entry` — see below.
 
 ## Examples
 
 ### Using Actual Hours
 
 ```
-/log-time 12345 "2026-02-04 09:00" --actual_hours 1.5 --notes "Troubleshot network connectivity"
+/log-time 12345 jtech "2026-02-04 09:00" --actual_hours 1.5 --notes "Troubleshot network connectivity"
 ```
 
 ### Using Start/End Times
 
 ```
-/log-time 12345 "2026-02-04 10:00" "2026-02-04 11:30" --notes "Remote support session"
+/log-time 12345 jtech "2026-02-04 10:00" "2026-02-04 11:30" --notes "Remote support session"
 ```
 
 ### Log Time Starting Now
 
 ```
-/log-time 12345 "now" --actual_hours 0.5 --notes "Quick phone support"
-```
-
-### Non-Billable Time
-
-```
-/log-time 12345 "2026-02-04 14:00" --actual_hours 0.5 --billable DoNotBill --notes "Internal documentation"
-```
-
-### No-Charge Time
-
-```
-/log-time 12345 "2026-02-04 15:00" --actual_hours 0.25 --billable NoCharge --notes "Courtesy follow-up"
+/log-time 12345 jtech "now" --actual_hours 0.5 --notes "Quick phone support"
 ```
 
 ### Full Example
 
 ```
-/log-time 12345 "2026-02-04 09:00" "2026-02-04 11:30" --notes "Server migration assistance" --billable Billable
+/log-time 12345 jtech "2026-02-04 09:00" "2026-02-04 11:30" --notes "Server migration assistance"
 ```
 
 ## Output
@@ -133,7 +123,6 @@ Time Details:
   Duration:   1.5 hours
 
 Billing:
-  Status:     Billable
   Work Type:  Remote Support
   Work Role:  Engineer
   Rate:       $150.00/hour
@@ -145,7 +134,7 @@ Notes:
 Ticket Time Summary:
   This Entry:  1.5 hours
   Previous:    2.0 hours
-  Total:       3.5 hours (3.5 billable)
+  Total:       3.5 hours
 ```
 
 ### With Agreement Info
@@ -226,19 +215,6 @@ Start: 2026-02-05 09:00 (tomorrow)
 Log future time entry? [Y/n]
 ```
 
-### Invalid Billable Option
-
-```
-Error: Invalid billable option "Bill"
-
-Valid options:
-- Billable    - Time will be billed to customer
-- DoNotBill   - Time tracked but not billed
-- NoCharge    - Time marked as no charge
-
-Example: /log-time 12345 "now" --actual_hours 1 --billable DoNotBill
-```
-
 ### No Agreement Warning
 
 ```
@@ -250,7 +226,6 @@ Rate: $175.00/hour
 Estimated: $262.50
 
 Proceed? [Y/n]
-Mark as non-billable? [n]
 ```
 
 ### Agreement Hours Exceeded
@@ -303,16 +278,25 @@ Cancel? [c]
 
 | Requested | Would need |
 |-----------|------------|
+| Marking an entry non-billable (`DoNotBill`, `NoCharge`) | A billing argument on `cw_create_time_entry` |
 | `work_type` — resolve a work type by name | A work type tool |
 | `work_role` — resolve a work role by name | A work role tool |
 
-Neither can be resolved by name, and `cw_create_time_entry`'s `workTypeId` and
-`workRoleId` therefore have no lookup behind them. When the caller names one,
-**say it cannot be resolved and create the entry without it**, letting the
-agreement and board defaults apply — rather than guessing an ID.
+`cw_create_time_entry` accepts `chargeToType`, `chargeToId`, `memberId`,
+`timeStart`, `timeEnd`, `actualHours`, `notes`, `internalNotes`, `workTypeId`
+and `workRoleId` — **and no billing argument at all.** An entry read back
+through `cw_search_time_entries` carries `billableOption`, so the field exists
+on the record and simply cannot be set from here.
 
-This matters more than the other gaps in this plugin: the work role is what
-sets the **billing rate**. A guessed `workRoleId` bills the customer at the
-wrong rate, and nothing downstream would flag it.
+**An entry created by this command takes the server's default billing
+treatment, which in most configurations is billable.** If work must not be
+billed, **do not log it through this command** — record it in the PSA directly.
+Never create an entry and then describe it as non-billable.
+
+Work types and roles have no lookup tool, so `workTypeId` and `workRoleId`
+cannot be resolved from a name. This matters more than the other gaps here: the
+work role sets the **billing rate**, so a guessed ID bills the customer at the
+wrong rate and nothing downstream would flag it. Create the entry without them
+and let the agreement and board defaults apply.
 
 ## Related Commands
