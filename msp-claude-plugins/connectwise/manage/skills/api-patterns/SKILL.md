@@ -64,6 +64,24 @@ The parts of this skill that remain useful are the ones that describe **what to
 send a tool and how to read what comes back** — the conditions grammar,
 pagination, ordering, and error semantics below.
 
+### Checking that the server is reachable
+
+```
+cw_test_connection
+```
+
+It takes no arguments and returns the instance's system information — API
+version and licensing details — by reading `/system/info`. It is the cheapest
+way to separate *the server is unreachable or misconfigured* from *the query
+returned nothing*, which are the two explanations for an empty result and have
+completely different fixes.
+
+Run it first when a sequence of calls fails in a way that looks environmental.
+**A success proves the server authenticated to the PSA; it proves nothing about
+the API member's permissions on any particular entity** — a member that can
+read `/system/info` may still be denied agreements or invoices, and that denial
+arrives as a per-call error rather than here.
+
 ## Conditions Query Syntax
 
 ### Basic Syntax
@@ -276,6 +294,25 @@ cw_search_tickets
   conditions: "closedFlag=false"
   orderBy:    "priority/id asc, dateEntered desc"
 ```
+
+### Resolving a member
+
+Several tools take a `memberId`, and **none of them infers it**. The server
+authenticates to the PSA as a single API member, which is not the technician a
+time entry, activity or assignment belongs to, so defaulting to the service
+account silently attributes work to the integration.
+
+```
+cw_search_members  conditions: "identifier=\"jtech\""
+cw_get_member      id: 217
+```
+
+`cw_search_members` resolves an identifier or a name to a member; `cw_get_member`
+reads one back in full once the id is known, which is what an answer naming a
+person — rather than a number — needs. Both are read-tier.
+
+`identifier` is the PSA login and is the stable key; `name` is display text and
+is not guaranteed unique. Prefer the identifier where the caller supplied one.
 
 ### Field selection, child collections and custom fields
 
