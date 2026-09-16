@@ -22,8 +22,8 @@ An invoice in ConnectWise PSA is the billing document issued to a client: the re
 - **What the client is contracted for** — recurring amounts and coverage
   live on the agreement, and an agreement is not an invoice; use
   `connectwise-psa-agreements`.
-- **Hours logged but not yet billed** — unbilled time is a time entry with
-  a `status` short of `Billed`; use `connectwise-psa-time-entries`.
+- **Hours logged but not yet billed** — unbilled time is a time entry that
+  has not reached the Billed state; use `connectwise-psa-time-entries`.
 - **A quote or proposal** — a priced document offering future work is a CPQ
   object; use `connectwise-cpq-quotes`.
 - **Expected revenue on a deal** — a forecast item is a projection, not a
