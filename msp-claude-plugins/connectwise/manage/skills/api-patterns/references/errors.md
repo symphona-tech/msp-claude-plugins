@@ -35,8 +35,8 @@
 
 | Error | Cause | Resolution |
 |-------|-------|------------|
-| `InvalidCredentials` | Bad auth | Verify company ID, keys |
-| `MissingClientId` | No clientId header | Add clientId header |
+| `InvalidCredentials` | Bad auth | **Not a caller-side fix.** The server holds the credential; report the failure and stop |
+| `MissingClientId` | No clientId header | **Not a caller-side fix.** The server sets this header; report the failure and stop |
 | `InvalidArgument` | Bad field value | Check field type/values |
 | `RequiredFieldMissing` | Missing required field | Add required fields |
 | `RecordNotFound` | Entity doesn't exist | Verify ID exists |
