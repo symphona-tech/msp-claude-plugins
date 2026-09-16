@@ -53,6 +53,19 @@ cw_create_ticket
 Only `summary` is required, and the tool takes resolved numeric IDs rather than
 nested objects. Use `initialDescription` for the first note with full details.
 
+**Resolve `priorityId` with `cw_list_priorities`, not from the table in
+[REFERENCE.md](./REFERENCE.md).** Priorities are per-tenant configuration: the
+1-4 Critical/High/Medium/Low scheme is the common default and an instance is
+free to differ, so a hardcoded id is drift rather than a shortcut. The same
+applies to `boardId` via `cw_list_boards`.
+
+```
+cw_list_priorities
+```
+
+It accepts `conditions`, `page` and `pageSize` like any other search, but a
+priority list is short enough that an unfiltered call is normally right.
+
 ### Get / Update a Ticket
 
 ```
