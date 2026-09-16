@@ -10,49 +10,43 @@ View agreement status, covered products, and remaining hours/incidents for a com
 
 ## Prerequisites
 
-- Valid ConnectWise PSA API credentials configured
-- User must have agreement read permissions
-- Either company_id or agreement_id is required
+- The `connectwise-manage-mcp` server is configured and reachable
+- The server's API member must hold agreement read permissions
+
+## Tools used
+
+| Step | Tool |
+|------|------|
+| Resolve company | `cw_search_companies` |
+| Find company agreements | `cw_search_agreements` |
+| Read one agreement | `cw_get_agreement` |
+| Read its line items | `cw_get_agreement_additions` |
 
 ## Steps
 
-1. **Validate input**
-   - Require either company_id or agreement_id
-   - Validate IDs are numeric
+1. **Resolve the company (if named rather than given by ID)**
+   - `cw_search_companies` with `conditions=name contains "<company>"`
 
 2. **Retrieve agreements**
-
-   If agreement_id provided:
-   ```http
-   GET /finance/agreements/{id}
-   ```
-
-   If company_id provided:
-   ```http
-   GET /finance/agreements?conditions=company/id={company_id}
-   ```
-
-   Add active filter if active_only=true:
-   ```
-   conditions=...and cancelledFlag=false and (endDate>=2026-02-04 or endDate is null)
-   ```
+   - By ID: `cw_get_agreement` with `id=<agreement_id>`
+   - By company: `cw_search_agreements` with
+     `conditions=company/id=<company_id> and cancelledFlag=false and (endDate >= [<today>] or endDate = null)`
+   - **`cancelledFlag=false` alone is not "active".** A non-cancelled agreement
+     whose `endDate` has passed is expired, and reporting it as active
+     overstates coverage. An open-ended agreement has a null `endDate`, so both
+     clauses are needed.
+   - When the caller asked to include expired, drop only the date clauses and
+     keep `cancelledFlag=false`; label each result with its `endDate`
 
 3. **Retrieve agreement additions (if include_additions=true)**
-   ```http
-   GET /finance/agreements/{id}/additions
-   ```
+   - `cw_get_agreement_additions` with `agreementId=<agreement_id>`
+   - These are the line items: what the agreement actually covers and at what
+     quantity
 
-4. **Retrieve covered work types**
-   ```http
-   GET /finance/agreements/{id}/workTypes
-   ```
-
-5. **Retrieve covered work roles**
-   ```http
-   GET /finance/agreements/{id}/workRoles
-   ```
-
-6. **Format and return agreement details**
+4. **Format and return agreement details**
+   - Report covered hours, remaining hours and expiry
+   - **Name any requested section that is unavailable** rather than returning a
+     coverage summary that looks complete
 
 ## Parameters
 
@@ -108,7 +102,7 @@ Found 2 active agreements
 Type:           Managed Services
 Status:         Active
 Start Date:     2025-01-01
-End Date:       2025-12-31
+End Date:       2026-12-31
 
 Billing:
   Cycle:        Monthly
@@ -121,8 +115,6 @@ Prepaid Hours:
   Remaining:    15.5 hours
 
 Coverage:
-  Work Types:   Remote Support, On-site Support
-  Work Roles:   All Roles
 
 Additions (3):
   - Azure Management (+$500/month)
@@ -142,8 +134,6 @@ Billing:
   Minimum:      0.25 hours
 
 Coverage:
-  Work Types:   All Types
-  Work Roles:   All Roles
 
 Note: Used for non-covered work.
 
@@ -170,7 +160,7 @@ Company:
 Status:
   Active:         Yes
   Start Date:     2025-01-01
-  End Date:       2025-12-31
+  End Date:       2026-12-31
   Auto Renew:     Yes
   Days Until Exp: 300 days
 
@@ -205,28 +195,6 @@ Utilization:        69% used
 Warning: 15.5 hours remaining. Consider upselling additional block.
 
 ================================================================================
-Covered Work Types
-================================================================================
-
-| Work Type        | Hourly Rate | Effective Rate | Limit      |
-|------------------|-------------|----------------|------------|
-| Remote Support   | $150.00     | Covered        | Unlimited  |
-| On-site Support  | $175.00     | Covered        | Unlimited  |
-| Phone Support    | $125.00     | Covered        | Unlimited  |
-| Project Work     | $175.00     | Not Covered    | N/A        |
-
-================================================================================
-Covered Work Roles
-================================================================================
-
-| Work Role         | Covered | Notes                    |
-|-------------------|---------|--------------------------|
-| Technician        | Yes     | Standard coverage        |
-| Engineer          | Yes     | Standard coverage        |
-| Senior Engineer   | Yes     | Standard coverage        |
-| Consultant        | No      | Bill at T&M rates        |
-
-================================================================================
 Agreement Additions
 ================================================================================
 
@@ -252,54 +220,6 @@ Agreement Additions
 Total Additions: $800.00/month recurring + $1,250.00 one-time
 
 ================================================================================
-Recent Usage (Last 30 Days)
-================================================================================
-
-| Date       | Ticket   | Hours | Work Type       | Technician |
-|------------|----------|-------|-----------------|------------|
-| 2026-02-04 | #54321   | 1.5   | Remote Support  | J. Smith   |
-| 2026-02-03 | #54320   | 2.0   | Remote Support  | J. Smith   |
-| 2026-02-01 | #54310   | 0.5   | Phone Support   | M. Johnson |
-| 2026-01-30 | #54305   | 3.0   | On-site Support | J. Smith   |
-
-Last 30 Days Total: 7.0 hours
-
-================================================================================
-```
-
-## API Authentication
-
-```bash
-# Base64 encode credentials: company+publicKey:privateKey
-AUTH=$(echo -n "${CW_COMPANY}+${CW_PUBLIC_KEY}:${CW_PRIVATE_KEY}" | base64)
-
-# Get agreements for company
-curl -s -X GET \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/finance/agreements?conditions=company/id=12345%20and%20cancelledFlag=false" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json"
-
-# Get specific agreement
-curl -s -X GET \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/finance/agreements/9876" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json"
-
-# Get agreement additions
-curl -s -X GET \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/finance/agreements/9876/additions" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json"
-
-# Get agreement work types
-curl -s -X GET \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/finance/agreements/9876/workTypes" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json"
 ```
 
 ## Error Handling
@@ -388,10 +308,33 @@ Auto Renew: No
 Recommend initiating renewal discussion with customer.
 ```
 
+## Not available through the tool surface
+
+| Requested | Would need |
+|-----------|------------|
+| Covered work types | An agreement work type tool |
+| Covered work roles | An agreement work role tool |
+| Recent usage against the agreement | A way to scope time entries to an agreement. `cw_search_time_entries` charges to a ticket, and this command does not resolve the agreement's tickets |
+
+The original command reported which work types and roles an agreement covers.
+**Neither is retrievable**, so a coverage answer built from this command is
+about hours and additions only.
+
+This is a real narrowing rather than a cosmetic one: *"is this work covered"*
+frequently turns on the work role, and an agreement summary that silently omits
+role coverage invites the reader to conclude that covered hours are the whole
+answer. Say the role coverage is unavailable whenever billing coverage is the
+question being asked.
+
+**Recent usage is available but is not free.** The usage table in the sample
+output does not come from any agreement tool — it requires a separate
+`cw_search_time_entries` call filtered to the company's tickets. Either make
+that call explicitly or omit the section; do not present an agreement response
+as though it carried usage.
+
 ## Output Includes
 
 - Agreement name, type, and status
-- Covered work types and work roles
 - Prepaid hours remaining (for block agreements)
 - Incident packs remaining
 - Covered configuration types

@@ -1,7 +1,7 @@
 ---
 description: Log a time entry against a ConnectWise PSA ticket
-argument-hint: "<ticket_id> <time_start> [time_end] [actual_hours] [notes] [billable] [work_type] [work_role]"
-arguments: [ticket_id, time_start, time_end, actual_hours, notes, billable, work_type, work_role]
+argument-hint: "<ticket_id> <member> <time_start> [time_end] [actual_hours] [notes]"
+arguments: [ticket_id, member, time_start, time_end, actual_hours, notes]
 ---
 
 # Log Time to ConnectWise PSA Ticket
@@ -10,120 +10,105 @@ Log a time entry against a ConnectWise ticket.
 
 ## Prerequisites
 
-- Valid ConnectWise PSA API credentials configured
-- User must have time entry creation permissions
+- The `connectwise-manage-mcp` server is configured and reachable
+- The server's API member must hold time entry permissions
 - Ticket must exist and be accessible
+
+## Tools used
+
+| Step | Tool |
+|------|------|
+| Validate the ticket | `cw_get_ticket` |
+| Resolve the member | `cw_search_members` |
+| Check agreement coverage | `cw_search_agreements` |
+| Create the entry | `cw_create_time_entry` |
+| Total time already on the ticket | `cw_search_time_entries` |
 
 ## Steps
 
 1. **Validate ticket exists**
-   ```http
-   GET /service/tickets/{id}
+   - `cw_get_ticket` with `id=<ticket_id>`
+   - Capture the company ID for the agreement check
+
+2. **Resolve the member**
+   - `cw_search_members` with `conditions=identifier="<member>"`
+   - `memberId` is **required** by `cw_create_time_entry` and is not inferred
+     from the caller. The server authenticates as one API member, which is not
+     the technician the time belongs to.
+   - **If `member` was not supplied, stop and ask.** Never fall back to the API
+     member the server authenticates as: that attributes billable work to a
+     shared service account and misstates who did it.
+
+3. **Calculate time values**
+   - `timeStart` is required; supply `timeEnd` or `actualHours`
+   - Both are ISO 8601
+
+4. **Check agreement coverage**
+   - `cw_search_agreements` with
+     `conditions=company/id=<company_id> and cancelledFlag=false and (endDate >= [<today>] or endDate = null)`
+   - Warn when the entry would exceed remaining covered hours
+
+5. **Create the time entry**
+
    ```
-   - Confirm ticket is accessible
-   - Get company ID for agreement lookup
-   - Note if ticket is closed (warn user)
-
-2. **Resolve work type (if provided)**
-   ```http
-   GET /time/workTypes?conditions=name='{work_type}'
-   ```
-
-3. **Resolve work role (if provided)**
-   ```http
-   GET /time/workRoles?conditions=name='{work_role}'
-   ```
-
-4. **Calculate time values**
-   - If `actual_hours` provided, calculate `time_end` from `time_start`
-   - If `time_end` provided, calculate `actual_hours` from difference
-   - Validate times are logical (end > start)
-
-5. **Check agreement coverage (if billable)**
-   ```http
-   GET /finance/agreements?conditions=company/id={companyId} and cancelledFlag=false
-   ```
-   - Warn if no active agreement
-   - Show remaining hours if block agreement
-
-6. **Create time entry**
-   ```http
-   POST /time/entries
-   Content-Type: application/json
-
-   {
-     "chargeToId": <ticket_id>,
-     "chargeToType": "ServiceTicket",
-     "member": {"identifier": "<current_user>"},
-     "timeStart": "<time_start>",
-     "timeEnd": "<time_end>",
-     "actualHours": <actual_hours>,
-     "notes": "<notes>",
-     "billableOption": "<billable>",
-     "workType": {"id": <work_type_id>},
-     "workRole": {"id": <work_role_id>}
-   }
+   cw_create_time_entry
+     chargeToType:  "ServiceTicket"
+     chargeToId:    <ticket_id>
+     memberId:      <resolved_member_id>
+     timeStart:     "<ISO 8601>"
+     timeEnd:       "<ISO 8601>"
+     notes:         "<work notes>"
+     internalNotes: "<internal notes>"
    ```
 
-7. **Return confirmation with totals**
+   `chargeToType`, `chargeToId`, `memberId` and `timeStart` are all required.
+   **A time entry against a ticket lands on the customer's next invoice** —
+   treat it as a billing action and confirm before creating one.
+
+6. **Return confirmation with totals**
+   - `cw_search_time_entries` with
+     `conditions=chargeToId=<ticket_id> and chargeToType="ServiceTicket"`
+   - Sum `actualHours` across the result for the ticket total. Without this call
+     there is no source for a previous or total figure — do not estimate one.
 
 ## Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| ticket_id | integer | Yes | - | Ticket ID to log time against |
-| time_start | datetime | Yes | - | Start time (YYYY-MM-DD HH:MM or "now") |
-| time_end | datetime | No* | - | End time |
-| actual_hours | decimal | No* | - | Hours worked (alternative to time_end) |
-| notes | string | No | - | Work description |
-| billable | string | No | Billable | Billable, DoNotBill, NoCharge |
-| work_type | string | No | - | Work type name |
-| work_role | string | No | - | Work role name |
+| ticket_id | integer | Yes | - | ConnectWise ticket ID |
+| member | string | Yes | - | Member identifier the time belongs to |
+| time_start | string | Yes | - | Start time (ISO 8601, or "now") |
+| time_end | string | No | - | End time (ISO 8601) |
+| actual_hours | number | No | - | Hours worked, as an alternative to time_end |
+| notes | string | No | - | Work notes, visible to the customer |
 
-*Either `time_end` or `actual_hours` is required
+**There is no `billable` parameter, and no work type or work role.** None of the
+three can be expressed through `cw_create_time_entry` — see below.
 
 ## Examples
 
 ### Using Actual Hours
 
 ```
-/log-time 12345 "2026-02-04 09:00" --actual_hours 1.5 --notes "Troubleshot network connectivity"
+/log-time 12345 jtech "2026-02-04 09:00" --actual_hours 1.5 --notes "Troubleshot network connectivity"
 ```
 
 ### Using Start/End Times
 
 ```
-/log-time 12345 "2026-02-04 10:00" "2026-02-04 11:30" --notes "Remote support session"
+/log-time 12345 jtech "2026-02-04 10:00" "2026-02-04 11:30" --notes "Remote support session"
 ```
 
 ### Log Time Starting Now
 
 ```
-/log-time 12345 "now" --actual_hours 0.5 --notes "Quick phone support"
-```
-
-### Specify Work Type and Role
-
-```
-/log-time 12345 "2026-02-04 14:00" --actual_hours 2.0 --work_type "Remote Support" --work_role "Engineer"
-```
-
-### Non-Billable Time
-
-```
-/log-time 12345 "2026-02-04 14:00" --actual_hours 0.5 --billable DoNotBill --notes "Internal documentation"
-```
-
-### No-Charge Time
-
-```
-/log-time 12345 "2026-02-04 15:00" --actual_hours 0.25 --billable NoCharge --notes "Courtesy follow-up"
+/log-time 12345 jtech "now" --actual_hours 0.5 --notes "Quick phone support"
 ```
 
 ### Full Example
 
 ```
-/log-time 12345 "2026-02-04 09:00" "2026-02-04 11:30" --notes "Server migration assistance" --work_type "On-site Support" --work_role "Senior Engineer" --billable Billable
+/log-time 12345 jtech "2026-02-04 09:00" "2026-02-04 11:30" --notes "Server migration assistance"
 ```
 
 ## Output
@@ -142,20 +127,13 @@ Time Details:
   End:        2026-02-04 10:30
   Duration:   1.5 hours
 
-Billing:
-  Status:     Billable
-  Work Type:  Remote Support
-  Work Role:  Engineer
-  Rate:       $150.00/hour
-  Amount:     $225.00
-
 Notes:
 "Troubleshot network connectivity issues. Identified DNS misconfiguration."
 
 Ticket Time Summary:
   This Entry:  1.5 hours
   Previous:    2.0 hours
-  Total:       3.5 hours (3.5 billable)
+  Total:       3.5 hours
 ```
 
 ### With Agreement Info
@@ -182,31 +160,6 @@ Notes:
 "Applied configuration changes and verified resolution."
 ```
 
-## API Authentication
-
-```bash
-# Base64 encode credentials: company+publicKey:privateKey
-AUTH=$(echo -n "${CW_COMPANY}+${CW_PUBLIC_KEY}:${CW_PRIVATE_KEY}" | base64)
-
-# Create time entry
-curl -s -X POST \
-  "https://${CW_HOST}/v4_6_release/apis/3.0/time/entries" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "clientId: ${CW_CLIENT_ID}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chargeToId": '"${TICKET_ID}"',
-    "chargeToType": "ServiceTicket",
-    "timeStart": "2026-02-04T09:00:00Z",
-    "timeEnd": "2026-02-04T10:30:00Z",
-    "actualHours": 1.5,
-    "notes": "Work description here",
-    "billableOption": "Billable",
-    "workType": {"id": 1},
-    "workRole": {"id": 1}
-  }'
-```
-
 ## Error Handling
 
 ### Ticket Not Found
@@ -227,7 +180,7 @@ Supported formats:
 - YYYY-MM-DDTHH:MM:SS (e.g., 2026-02-04T09:00:00)
 - "now" (current time)
 
-Example: /log-time 12345 "2026-02-04 09:00" --actual_hours 1.5
+Example: /log-time 12345 jtech "2026-02-04 09:00" --actual_hours 1.5
 ```
 
 ### Missing Duration
@@ -236,8 +189,8 @@ Example: /log-time 12345 "2026-02-04 09:00" --actual_hours 1.5
 Error: Either time_end or actual_hours is required
 
 Examples:
-  /log-time 12345 "2026-02-04 09:00" "2026-02-04 10:30"
-  /log-time 12345 "2026-02-04 09:00" --actual_hours 1.5
+  /log-time 12345 jtech "2026-02-04 09:00" "2026-02-04 10:30"
+  /log-time 12345 jtech "2026-02-04 09:00" --actual_hours 1.5
 ```
 
 ### End Before Start
@@ -261,57 +214,16 @@ Start: 2026-02-05 09:00 (tomorrow)
 Log future time entry? [Y/n]
 ```
 
-### Invalid Work Type
-
-```
-Error: Work type not found: "Invalid Type"
-
-Available work types:
-- Remote Support (ID: 1)
-- On-site Support (ID: 2)
-- Phone Support (ID: 3)
-- Project Work (ID: 4)
-
-Example: /log-time 12345 "now" --actual_hours 1 --work_type "Remote Support"
-```
-
-### Invalid Work Role
-
-```
-Error: Work role not found: "Invalid Role"
-
-Available work roles:
-- Engineer (ID: 1)
-- Senior Engineer (ID: 2)
-- Technician (ID: 3)
-- Consultant (ID: 4)
-```
-
-### Invalid Billable Option
-
-```
-Error: Invalid billable option "Bill"
-
-Valid options:
-- Billable    - Time will be billed to customer
-- DoNotBill   - Time tracked but not billed
-- NoCharge    - Time marked as no charge
-
-Example: /log-time 12345 "now" --actual_hours 1 --billable DoNotBill
-```
-
 ### No Agreement Warning
 
 ```
 Warning: No active agreement for Acme Corporation
 
-Time will be billed at Time & Materials rates.
-Work Type: Remote Support
-Rate: $175.00/hour
-Estimated: $262.50
+Time will be billed at whatever rate the board and agreement defaults apply.
+This command cannot resolve a work type, a work role or a rate, so it cannot
+estimate a cost.
 
 Proceed? [Y/n]
-Mark as non-billable? [n]
 ```
 
 ### Agreement Hours Exceeded
@@ -326,7 +238,6 @@ Overage:   1.0 hours (billed at T&M rates)
 
 Proceed? [Y/n]
 Split entry? [s] (0.5h covered, 1.0h T&M)
-Mark as non-billable? [n]
 ```
 
 ### Closed Ticket Warning
@@ -360,9 +271,29 @@ Adjust start time to 10:30? [a]
 Cancel? [c]
 ```
 
-## Related Commands
+## Not available through the tool surface
 
-- `/get-ticket` - View ticket details and existing time entries
-- `/close-ticket` - Close ticket with final time entry
-- `/update-ticket` - Update ticket fields
-- `/add-note` - Add note to ticket
+| Requested | Would need |
+|-----------|------------|
+| Marking an entry non-billable (`DoNotBill`, `NoCharge`) | A billing argument on `cw_create_time_entry` |
+| `work_type` — resolve a work type by name | A work type tool |
+| `work_role` — resolve a work role by name | A work role tool |
+
+`cw_create_time_entry` accepts `chargeToType`, `chargeToId`, `memberId`,
+`timeStart`, `timeEnd`, `actualHours`, `notes`, `internalNotes`, `workTypeId`
+and `workRoleId` — **and no billing argument at all.** An entry read back
+through `cw_search_time_entries` carries `billableOption`, so the field exists
+on the record and simply cannot be set from here.
+
+**An entry created by this command takes the server's default billing
+treatment, which in most configurations is billable.** If work must not be
+billed, **do not log it through this command** — record it in the PSA directly.
+Never create an entry and then describe it as non-billable.
+
+Work types and roles have no lookup tool, so `workTypeId` and `workRoleId`
+cannot be resolved from a name. This matters more than the other gaps here: the
+work role sets the **billing rate**, so a guessed ID bills the customer at the
+wrong rate and nothing downstream would flag it. Create the entry without them
+and let the agreement and board defaults apply.
+
+## Related Commands
