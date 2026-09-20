@@ -10,49 +10,72 @@ Create a new service ticket in ConnectWise PSA with specified details.
 
 ## Prerequisites
 
-- Valid ConnectWise PSA API credentials configured
+- The `connectwise-manage-mcp` server is configured and reachable
 - Company must exist in ConnectWise PSA
-- User must have ticket creation permissions
+- The server's API member must hold ticket creation permissions
+
+## Tools used
+
+| Step | Tool |
+|------|------|
+| Resolve company | `cw_search_companies` |
+| Check for duplicates | `cw_search_tickets` |
+| Resolve board | `cw_list_boards` |
+| Resolve contact | `cw_search_contacts` |
+| Resolve priority | `cw_list_priorities` |
+| Resolve status | `cw_list_statuses` |
+| Check agreement coverage | `cw_search_agreements` |
+| Create the ticket | `cw_create_ticket` |
 
 ## Steps
 
 1. **Validate company exists**
    - If numeric, use as company ID directly
-   - If text, search companies by name or identifier
+   - Otherwise call `cw_search_companies` with `conditions=name contains "<company>" or identifier="<company>"`
    - Suggest similar companies if no exact match found
 
 2. **Check for duplicate tickets**
-   - Search open tickets for same company
+   - `cw_search_tickets` with `conditions=company/id=<id> and closedFlag=false`
    - Warn if similar summaries found in last 24 hours
 
 3. **Resolve service board**
-   - If specified, look up board by name or ID
+   - `cw_list_boards` and match by name or ID
    - If not specified, use company default or first available board
    - Validate board exists and is active
 
 4. **Resolve optional fields**
-   - Look up contact by name or email if provided
+   - `cw_search_contacts` with `conditions=company/id=<id>` to look up a contact by name or email
    - Validate contact belongs to the company
-   - Map priority text to ID (Critical=1, High=2, Medium=3, Low=4)
-   - Look up status by name or use default "New"
+   - `cw_list_priorities` to map priority text to ID (Critical=1, High=2, Medium=3, Low=4)
+   - `cw_list_statuses` with `boardId=<id>` to resolve the status, or use the board default "New"
 
 5. **Check agreement coverage**
-   - Query active agreements for company
+   - `cw_search_agreements` with
+     `conditions=company/id=<id> and cancelledFlag=false and (endDate >= [<today>] or endDate = null)`
+   - **`cancelledFlag=false` alone is not "active".** An agreement that simply
+     expired is never cancelled, so the unfiltered condition reports lapsed
+     coverage as current. The `endDate` clause is what excludes it; the null
+     branch keeps open-ended agreements.
    - Warn if no active agreement (may be T&M billing)
 
 6. **Create the ticket**
-   ```json
-   POST /service/tickets
-   {
-     "summary": "<summary>",
-     "board": {"id": <resolved_board_id>},
-     "company": {"id": <resolved_company_id>},
-     "contact": {"id": <resolved_contact_id>},
-     "priority": {"id": <priority>},
-     "status": {"name": "New"},
-     "initialDescription": "<description>"
-   }
+
+   `cw_create_ticket` takes resolved numeric IDs rather than nested objects:
+
    ```
+   cw_create_ticket
+     summary:            "<summary>"
+     boardId:            <resolved_board_id>
+     companyId:          <resolved_company_id>
+     contactId:          <resolved_contact_id>
+     priorityId:         <resolved_priority_id>
+     statusId:           <resolved_status_id>
+     initialDescription: "<description>"
+   ```
+
+   Only `summary` is required. Omit any field that did not resolve rather than
+   guessing an ID — a wrong `boardId` files the ticket on the wrong queue and
+   silently changes which SLA applies.
 
 7. **Return ticket details**
    - Ticket ID
@@ -169,15 +192,18 @@ Contacts at this company:
 - Bob Wilson (bob@acme.com)
 ```
 
-### API Errors
+### Tool Errors
 
 | Error | Resolution |
 |-------|------------|
-| Invalid board ID | List available boards and retry |
+| Invalid board ID | List available boards with `cw_list_boards` and retry |
 | Company not found | Search for correct company |
 | Contact not found | Create ticket without contact |
 | Rate limited | Wait and retry automatically |
 | Summary too long | Truncate to 100 characters |
+
+**No fallback path exists.** If `cw_create_ticket` fails, report the failure and
+stop. Do not attempt to reach ConnectWise by any other route.
 
 ## Related Commands
 
