@@ -226,4 +226,3 @@ Reported as tool errors rather than HTTP status codes; the conditions are what t
 ## Related Skills
 
 - [Devices](../devices/SKILL.md) - Device management
-- [API Patterns](../api-patterns/SKILL.md) - Authentication and pagination

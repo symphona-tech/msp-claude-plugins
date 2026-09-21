@@ -222,4 +222,3 @@ After scheduled maintenance:
 
 - [Devices](../devices/SKILL.md) - Device management
 - [Tickets](../tickets/SKILL.md) - Create tickets from alerts
-- [API Patterns](../api-patterns/SKILL.md) - Authentication
