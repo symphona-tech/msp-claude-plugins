@@ -50,6 +50,12 @@ Lower number = higher priority. **Priority 1 is the most urgent** (opposite to s
 | 3 | Medium | 4 hours | 24 hours | Single user or workaround exists |
 | 4 | Low | 8 hours | 72 hours | Minor issue, enhancement request |
 
+**List them with `cw_list_priorities`.** The ids above are the common default
+and are **not** validated against any particular instance — priorities are
+per-tenant configuration, and the tool is the authority. The SLA columns are
+illustrative in the same way; SLA definitions are not enumerable on this tool
+surface at all.
+
 ---
 
 ## Service Boards
