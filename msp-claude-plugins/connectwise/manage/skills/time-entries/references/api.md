@@ -1,5 +1,19 @@
 # ConnectWise PSA Time Entry API Reference
 
+**Reference, not workflow.** Every operation here is reached through a
+`connectwise-manage-mcp` tool where one exists; the request shapes below
+describe the ConnectWise data model so a returned record is legible. They are
+not routes this plugin calls.
+
+| Operation | Tool |
+|-----------|------|
+| Create | `cw_create_time_entry` |
+| Get | `cw_get_time_entry` |
+| Search | `cw_search_time_entries` |
+| Update | **none** |
+| Delete | **none** |
+| Time sheets, approval | **none** |
+
 ## Create Time Entry (Start/End)
 
 ```http
@@ -66,23 +80,14 @@ GET /time/entries/{id}
 
 ## Update Time Entry
 
-```http
-PATCH /time/entries/{id}
-Content-Type: application/json
-
-{
-  "notes": "Updated notes with additional details.",
-  "actualHours": 2.0
-}
-```
+**No tool updates a time entry.** The record shape is documented here for
+reading; a correction is made in the PSA directly, and after the owning time
+sheet is submitted it needs someone with approval rights.
 
 ## Delete Time Entry
 
-```http
-DELETE /time/entries/{id}
-```
-
-**Note:** Cannot delete billed time entries.
+**No tool deletes a time entry**, and the inventoried surface exposes no delete
+tool at all. ConnectWise itself will not delete a billed entry.
 
 ## Search Time Entries
 
@@ -92,76 +97,11 @@ GET /time/entries?conditions=member/id=123 and timeStart>=[2024-02-01]
 
 ## Time Sheets
 
-### Time Sheet Status Values
-
-| Status | Description |
-|--------|-------------|
-| Open | Time sheet open for editing |
-| Submitted | Submitted for approval |
-| Approved | Approved by manager |
-| Rejected | Returned for correction |
-
-### Get Time Sheets
-
-```http
-GET /time/sheets?conditions=member/id=123 and year=2024 and period=7
-```
-
-### Submit Time Sheet
-
-```http
-PATCH /time/sheets/{id}
-Content-Type: application/json
-
-{
-  "status": "Submitted"
-}
-```
+**No tool reads or submits time sheets.** A time sheet groups entries for a
+member and period; once submitted, its entries can no longer be corrected
+without approval rights. Relevant when reading an entry, not actionable here.
 
 ## Approval
 
-### Time Entry Approval Status Values
-
-| Status | Description |
-|--------|-------------|
-| Open | Pending approval |
-| Approved | Approved for billing |
-| Rejected | Rejected, needs correction |
-| Billed | Already invoiced |
-
-### Approve Time Entry
-
-```http
-PATCH /time/entries/{id}
-Content-Type: application/json
-
-{
-  "status": "Approved"
-}
-```
-
-### Reject Time Entry
-
-```http
-PATCH /time/entries/{id}
-Content-Type: application/json
-
-{
-  "status": "Rejected",
-  "internalNotes": "Please add more detail about work performed."
-}
-```
-
-### Bulk Approval
-
-```http
-POST /time/entries/bulk
-Content-Type: application/json
-
-{
-  "ids": [1001, 1002, 1003],
-  "operation": {
-    "status": "Approved"
-  }
-}
-```
+**No tool drives the approval workflow.** Approval state is visible on a
+returned entry; changing it is a PSA action.

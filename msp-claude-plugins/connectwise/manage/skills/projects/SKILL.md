@@ -26,11 +26,28 @@ Projects in ConnectWise PSA track larger bodies of work that span multiple ticke
   never to the project or phase directly; use
   `connectwise-psa-time-entries`.
 
-## API Endpoint
+## Tool surface
+
+Projects are reached through `connectwise-manage-mcp`, never by direct REST.
+The endpoints below are named for orientation only.
 
 ```
-Base: /project/projects
+Projects:        /project/projects
+Project tickets: /project/tickets
 ```
+
+| Tool | Purpose |
+|------|---------|
+| `cw_search_projects` | Search projects with CW conditions syntax |
+| `cw_get_project` | Fetch one project by ID |
+| `cw_create_project` | Create a project |
+| `cw_search_project_tickets` | Search tickets on a project board |
+| `cw_get_project_ticket` | Fetch one project ticket |
+| `cw_get_project_ticket_notes` | Read a project ticket's notes |
+| `cw_add_project_ticket_note` | Add a note to a project ticket |
+
+There is **no tool for project phases, templates, or team assignment** — see
+[Not available through the tool surface](#not-available-through-the-tool-surface).
 
 ## Key Concepts
 
@@ -46,7 +63,7 @@ Standard project statuses in ConnectWise PSA:
 | 4 | Cancelled | Cancelled project |
 | 5 | Waiting | Awaiting approval/resources |
 
-Query `/project/projects/statuses` for configurable statuses.
+Project statuses are configurable. No tool enumerates them, so treat the table above as illustrative and confirm the values configured in your own PSA.
 
 ### Project Types
 
@@ -68,117 +85,69 @@ See [references/fields.md](references/fields.md) for the complete project, phase
 
 ## Common Workflows
 
+### Find projects
+
+```
+cw_search_projects
+  conditions: "status/id=1"
+  orderBy:    "estimatedEnd asc"
+```
+
+Status 1 is Open. See the status table above for the rest.
+
+### Read one project
+
+```
+cw_get_project  id: 4321
+```
+
+The record carries `estimatedHours`, `actualHours`, `percentComplete` and
+`budgetAnalysis`, which is what most delivery-health questions turn on.
+
 ### Create a project
 
-```http
-POST /project/projects
-Content-Type: application/json
-
-{
-  "name": "Office 365 Migration - ACME Corp",
-  "company": {"id": 12345},
-  "status": {"id": 1},
-  "manager": {"id": 100},
-  "estimatedStart": "2024-03-01",
-  "estimatedEnd": "2024-05-01",
-  "estimatedHours": 200,
-  "billingMethod": "ActualRates",
-  "description": "Migrate from on-premises Exchange to Office 365"
-}
+```
+cw_create_project
+  name:      "Acme Server Migration"
+  companyId: 12345
 ```
 
-Fixed-fee and not-to-exceed projects use the same endpoint with a
-different `billingMethod` and `billingAmount`/`budgetAmount`. See
-[references/api.md](references/api.md) for those variants, plus get,
-update, and close-project examples.
+Check the tool's input schema for the fields it accepts; the concepts above
+describe the full ConnectWise model, which is wider. See
+[references/api.md](references/api.md) for the request shapes behind each
+operation and for what the surface does not reach.
 
-### Create a project from a template
+### Work a project ticket
 
-```http
-GET /project/projects?conditions=type/id=2
+```
+cw_search_project_tickets  conditions: "project/id=4321 and closedFlag=false"
+cw_get_project_ticket      id: 98765
+cw_add_project_ticket_note id: 98765  text: "Cutover scheduled for Friday."
 ```
 
-```http
-POST /project/projects
-Content-Type: application/json
+Project tickets are a **separate entity** from service tickets and have their
+own tools; `cw_search_tickets` will not find them.
 
-{
-  "name": "Client Onboarding - ACME Corp",
-  "company": {"id": 12345},
-  "templateFlag": false,
-  "projectTemplateId": 100
-}
-```
+## Reading project health
 
-When using `projectTemplateId`, ConnectWise copies all phases from the
-template, project tickets associated with those phases, budget and
-billing settings, and team assignments (if configured).
+Budget signals come off the project record itself, so a portfolio review is one
+`cw_search_projects` call plus arithmetic:
 
-### Break a project into phases
+- `budgetAnalysis` — `OverBudget`, `OnBudget` or `UnderBudget`
+- burn rate — `(actualHours / estimatedHours) / (percentComplete / 100)`; above
+  1.2 means hours are being consumed faster than progress is delivered
+- remaining budget — `estimatedHours - actualHours`, which matters most on
+  `FixedFee` and `NotToExceed` work
 
-Phases give a project its own timelines and budgets per chunk of work.
-Endpoint: `/project/projects/{projectId}/phases`.
-
-```http
-POST /project/projects/{projectId}/phases
-Content-Type: application/json
-
-{
-  "description": "Phase 1: Discovery",
-  "scheduledStart": "2024-03-01",
-  "scheduledEnd": "2024-03-15",
-  "scheduledHours": 40,
-  "wbsCode": "1.1"
-}
-```
-
-### Create a project ticket
-
-Project tickets are service tickets linked to a project and phase via the
-`project` and `phase` fields. See
-[references/api.md](references/api.md) for the create request and the
-`GET /project/projects/{projectId}/tickets` endpoint.
-
-### Assign team members
-
-Endpoint: `/project/projects/{projectId}/teamMembers`. See
-[references/api.md](references/api.md) for the full request shape
-(`member`, `projectRole`, `workRole`, `startDate`/`endDate`,
-`hoursScheduled`).
-
-## API Patterns
-
-**Active projects for company:**
-```
-conditions=company/id=12345 and status/id=1
-```
-
-**Projects by manager:**
-```
-conditions=manager/id=100 and status/id=1
-```
-
-**Overdue projects:**
-```
-conditions=estimatedEnd<[2024-02-01] and status/id=1
-```
-
-**Projects over budget:**
-```
-conditions=budgetAnalysis="OverBudget"
-```
-
-**Template projects:**
-```
-conditions=type/id=2
-```
+**Phase-level health is not observable here.** A project can read healthy at the
+top level while individual phases run overdue, and no tool exposes phases.
 
 ## Gotchas
 
-- **Templates are just projects with `type/id=2`.** There's no separate templates endpoint — query `/project/projects?conditions=type/id=2`.
+- **Templates are just projects with a template project type.** There is no separate template tool; `cw_search_projects` finds them by filtering on the type, e.g. `conditions=type/name="Template"`. Resolve the type for your own instance rather than assuming an id — project types are configurable.
 - **`projectTemplateId` only applies at creation.** It copies phases, tickets, budget/billing settings, and team assignments once; it does not keep the new project in sync with later template edits.
 - **`budgetAnalysis` is server-calculated**, not settable — use `budgetHours`/`budgetAmount` to set the cap and read `budgetAnalysis` to see whether the project is over/under/on budget.
-- **Project tickets are regular service tickets** (`POST /service/tickets`) with `project`/`phase` fields set — there's no separate project-ticket-creation endpoint.
+- **Project tickets are a separate entity from service tickets.** They are read with `cw_search_project_tickets`; no tool creates one. Do not reach for `cw_create_ticket` — that writes a service ticket, which is not the same record.
 
 ## Best Practices
 
@@ -193,9 +162,23 @@ conditions=type/id=2
 
 See [references/errors.md](references/errors.md) for the complete error reference.
 
-## Related Skills
+## Not available through the tool surface
 
-- [ConnectWise Tickets](../tickets/SKILL.md) - Project tickets
-- [ConnectWise Time Entries](../time-entries/SKILL.md) - Project time tracking
-- [ConnectWise Companies](../companies/SKILL.md) - Company management
-- [ConnectWise API Patterns](../api-patterns/SKILL.md) - Query syntax and auth
+| Operation | Would need |
+|-----------|------------|
+| Reading or creating project phases | A phases tool |
+| Creating a project from a template | A project-template tool |
+| Assigning team members | A project-team tool |
+| Updating or deleting a project | An update or delete tool. `cw_create_project` exists; neither counterpart does |
+
+**Phases are the significant gap.** Milestone tracking, per-phase hours and
+overdue-phase detection all depend on them, and none is available. Where a
+review would report on phases, say so rather than substituting project-level
+totals — the two answer different questions, and a project-level read presented
+as a delivery picture is the failure mode worth avoiding.
+
+[references/api.md](references/api.md) records the request shape behind each of
+these, so what is missing stays legible when a record referencing a phase or a
+template comes back from a read.
+
+## Related Skills
