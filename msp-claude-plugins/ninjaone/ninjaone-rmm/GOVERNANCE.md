@@ -41,10 +41,10 @@ tier each bucket actually enforces at.
 
 | Group | What it can do | Enforcement tier | Tools |
 |---|---|---|---|
-| **Read** | Cannot change NinjaOne or endpoint state. Safe for autonomous agents. | `read` | `ninjaone_status`, `ninjaone_devices_list`, `ninjaone_devices_get`, `ninjaone_devices_alerts`, `ninjaone_devices_activities`, `ninjaone_devices_services`, `ninjaone_organizations_list`, `ninjaone_organizations_get`, `ninjaone_organizations_devices`, `ninjaone_organizations_locations`, `ninjaone_alerts_list`, `ninjaone_alerts_summary`, `ninjaone_tickets_list`, `ninjaone_tickets_get`, `ninjaone_tickets_comments`, `ninjaone_tickets_boards_list` |
-| **Write** | Creates or modifies records — **and reboots customer machines.** | `write` | `ninjaone_organizations_create`, `ninjaone_tickets_create`, `ninjaone_tickets_update`, `ninjaone_tickets_add_comment`, `ninjaone_alerts_reset`, `ninjaone_alerts_reset_all`, `ninjaone_devices_reboot` |
+| **Read** | Cannot change NinjaOne or endpoint state. Safe for autonomous agents. | `read` | `ninjaone_status`, `ninjaone_navigate`, `ninjaone_devices_list`, `ninjaone_devices_get`, `ninjaone_devices_alerts`, `ninjaone_devices_activities`, `ninjaone_devices_services`, `ninjaone_devices_get_custom_fields`, `ninjaone_organizations_list`, `ninjaone_organizations_get`, `ninjaone_organizations_devices`, `ninjaone_organizations_locations`, `ninjaone_organizations_get_custom_fields`, `ninjaone_alerts_get`, `ninjaone_alerts_list`, `ninjaone_alerts_summary`, `ninjaone_tickets_list`, `ninjaone_tickets_get`, `ninjaone_tickets_comments`, `ninjaone_tickets_boards_list` |
+| **Write** | Creates or modifies records — **and reboots customer machines.** | `write` | `ninjaone_organizations_create`, `ninjaone_organizations_update_custom_fields`, `ninjaone_tickets_create`, `ninjaone_tickets_update`, `ninjaone_tickets_add_comment`, `ninjaone_alerts_reset`, `ninjaone_alerts_reset_all`, `ninjaone_devices_reboot`, `ninjaone_devices_update_custom_fields` |
 | **Delete** | — | `write` — **not** a tier of its own | **Empty.** No NinjaOne tool name carries a delete-verb token. |
-| **Admin** | — | `admin` | **Empty in `VENDOR_TOOL_CONFIG`.** `ninjaone_alerts_get` reaches `admin` only by the fail-closed default — see below. |
+| **Admin** | — | `admin` | **Empty.** No tool in this plugin is classified `admin` here. `ninjaone_alerts_get` is `read` above, but `VENDOR_TOOL_CONFIG` still has no entry for it — see below. |
 
 ### Read this row twice: `write` includes reboot
 
@@ -83,18 +83,33 @@ explicit `customTools` allowlist
 `ninjaone_devices_reboot` and `ninjaone_alerts_reset_all` from it. That
 allowlist is the only mechanism Conduit offers here.
 
-### One documented tool Conduit has not classified
+### Where the table and `VENDOR_TOOL_CONFIG` disagree
 
-The NinjaOne MCP server registers 25 tools;
-`VENDOR_TOOL_CONFIG` (`src/proxy/result-cache.ts`) classifies 24.
-**`ninjaone_alerts_get`** — a single-alert read — has no entry.
-Classification is fail-closed, and the enforcement gate coerces an
+The NinjaOne MCP server registers 29 tools at `v2.3.1`, and the table
+above classifies all 29. `VENDOR_TOOL_CONFIG`
+(`src/proxy/result-cache.ts`) was written against a 25-tool surface and
+classifies 24 of those, so it lags the table in two ways. It has no
+entry for **`ninjaone_alerts_get`** — a single-alert read — and none for
+the four `*_custom_fields` tools, which postdate it:
+`ninjaone_devices_get_custom_fields`,
+`ninjaone_devices_update_custom_fields`,
+`ninjaone_organizations_get_custom_fields` and
+`ninjaone_organizations_update_custom_fields`. Two of those four write.
+
+The table is the tier documentation; `VENDOR_TOOL_CONFIG` is what
+Conduit enforces on. Where a deployment routes through Conduit, its
+classification is fail-closed and the enforcement gate coerces an
 unclassified tool to the highest tier:
 `const requiredTier: PermissionTier = classified ?? 'admin';`
-(`src/access/access-enforcement.ts:63`). So a `read`-tier agent can call
-`ninjaone_alerts_list` and `ninjaone_alerts_summary` but is denied
-`ninjaone_alerts_get`. That is a classification gap, not a policy
-decision; classifying it as `read` would be a privilege reduction.
+(`src/access/access-enforcement.ts:63`). So on such a deployment a
+`read`-tier agent can call `ninjaone_alerts_list` and
+`ninjaone_alerts_summary` but is denied `ninjaone_alerts_get`, and every
+one of the four `*_custom_fields` tools requires `admin` — including the
+two that only read. That is a classification gap rather than a policy
+decision, and closing it in `VENDOR_TOOL_CONFIG` to match the table
+above is a privilege reduction on the reads and a privilege *grant* on
+the two writes, which is why the two documents are reconciled
+deliberately rather than by copying one into the other.
 
 `ninjaone_navigate` is classified `read` but is refused for *every*
 caller at *every* tier, org owners included: Conduit suppresses
