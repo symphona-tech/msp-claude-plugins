@@ -44,21 +44,15 @@ Conditions persist until resolved; alerts can be dismissed independently.
 
 ### Get Device Alerts
 
-```http
-GET /api/v2/device/{id}/alerts
-Authorization: Bearer {token}
-```
+Tool: `ninjaone_devices_alerts`
 
-Returns active alerts for a specific device.
+Active alerts for one device, given `device_id` and optionally a `severity` filter.
 
 ### Reset/Dismiss Alert
 
-```http
-DELETE /api/v2/alert/{uid}
-Authorization: Bearer {token}
-```
+Tool: `ninjaone_alerts_reset`
 
-Dismisses an alert by its unique identifier. The underlying condition may still exist if not resolved.
+Dismisses one alert, given its `alert_uid`. **Dismissing an alert does not resolve the condition** — the condition persists independently, and NinjaOne will not regenerate the alert until it next re-triggers. Clearing alerts to make a dashboard look green changes nothing about the customer's disk still being full.
 
 ### Reset All Alerts (Bulk Dismiss)
 
@@ -159,25 +153,9 @@ Useful for dashboards and morning briefings to understand the overall alert post
 
 Configure webhooks to receive real-time alert notifications:
 
-### Configure Webhook
+### Webhook configuration
 
-```http
-PUT /api/v2/webhook
-Content-Type: application/json
-```
-
-```json
-{
-  "url": "https://your-server.com/webhook/ninjaone",
-  "events": ["ALERT_TRIGGERED", "ALERT_CLEARED"]
-}
-```
-
-### Remove Webhook
-
-```http
-DELETE /api/v2/webhook
-```
+Webhooks carry NinjaOne's push feed, and **no tool in this plugin configures them.** Every tool here is point-in-time: it answers what is true now, and nothing subscribes to changes. Webhook setup is done in the NinjaOne console.
 
 ### Webhook Payload
 
@@ -244,4 +222,3 @@ After scheduled maintenance:
 
 - [Devices](../devices/SKILL.md) - Device management
 - [Tickets](../tickets/SKILL.md) - Create tickets from alerts
-- [API Patterns](../api-patterns/SKILL.md) - Authentication
