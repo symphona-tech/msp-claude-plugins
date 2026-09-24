@@ -19,10 +19,12 @@ ConnectWise can POST to your endpoint on entity changes:
 
 ## Registering Callbacks
 
-```http
-POST /system/callbacks
-Content-Type: application/json
+**No tool registers a callback, and this is not a request to make from here.**
+Callback registration is a PSA administration action; the shape below documents
+what such a registration looks like so a callback payload received elsewhere can
+be understood, not so that a client issues it.
 
+```json
 {
   "url": "https://your-server.com/webhook",
   "objectId": 0,

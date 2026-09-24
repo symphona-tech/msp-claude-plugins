@@ -1,5 +1,19 @@
 # ConnectWise PSA Project API Reference
 
+**Reference, not workflow.** Every operation here is reached through a
+`connectwise-manage-mcp` tool where one exists; the request shapes below
+describe the ConnectWise data model so a returned record is legible. They are
+not routes this plugin calls.
+
+| Operation | Tool |
+|-----------|------|
+| Create project | `cw_create_project` |
+| Get project | `cw_get_project` |
+| Search projects | `cw_search_projects` |
+| Project tickets | `cw_search_project_tickets`, `cw_get_project_ticket` |
+| Update, close, delete a project | **none** |
+| Phases, templates, team assignment | **none** |
+
 ## Create Project
 
 ```http
@@ -27,27 +41,13 @@ GET /project/projects/{id}
 
 ## Update Project
 
-```http
-PATCH /project/projects/{id}
-Content-Type: application/json
-
-{
-  "percentComplete": 50,
-  "estimatedEnd": "2024-05-15"
-}
-```
+**No tool updates a project.** The patch shape is documented for reading the
+fields it names; changes are made in the PSA.
 
 ## Close Project
 
-```http
-PATCH /project/projects/{id}
-Content-Type: application/json
-
-{
-  "status": {"id": 2},
-  "actualEnd": "2024-05-10"
-}
-```
+**No tool closes a project.** Closure is a status change, and no project update
+tool exists to make it.
 
 ## Search Projects
 
@@ -85,81 +85,47 @@ Content-Type: application/json
 
 ## Create Phase
 
-```http
-POST /project/projects/{projectId}/phases
-Content-Type: application/json
-
-{
-  "description": "Phase 1: Discovery",
-  "scheduledStart": "2024-03-01",
-  "scheduledEnd": "2024-03-15",
-  "scheduledHours": 40,
-  "wbsCode": "1.1"
-}
-```
-
-Phase endpoint: `/project/projects/{projectId}/phases`
+**No tool creates or reads project phases.** This is the significant gap in
+project coverage: milestone tracking, per-phase hours and overdue-phase
+detection all depend on phases, and none is available.
 
 ## Get Templates
 
-```http
-GET /project/projects?conditions=type/id=2
+Project templates are project records distinguished by their project type, so
+`cw_search_projects` lists them like any other project — it forwards
+`conditions` to `/project/projects` unchanged:
+
 ```
+cw_search_projects
+  conditions: "type/name=\"Template\""
+```
+
+Resolve the template type's name or id from your own PSA rather than assuming
+one; project types are configurable per tenant. What is missing is not the
+ability to *find* a template but the ability to *apply* one — see below.
 
 ## Create Project from Template
 
-```http
-POST /project/projects
-Content-Type: application/json
-
-{
-  "name": "Client Onboarding - ACME Corp",
-  "company": {"id": 12345},
-  "templateFlag": false,
-  "projectTemplateId": 100
-}
-```
-
-When using `projectTemplateId`, ConnectWise copies:
-- All phases from template
-- Project tickets associated with phases
-- Budget and billing settings
-- Team assignments (if configured)
+**No tool creates a project from a template.** `cw_create_project` creates a
+bare project; template expansion is a PSA action.
 
 ## Get Project Tickets
 
-```http
-GET /project/projects/{projectId}/tickets
-```
+Served by `cw_search_project_tickets` (filter on `project/id`) and
+`cw_get_project_ticket`. Project tickets are a **separate entity** from service
+tickets; `cw_search_tickets` will not return them.
 
 ## Create Project Ticket
 
-```http
-POST /service/tickets
-Content-Type: application/json
+**No tool creates a project ticket.** `cw_create_ticket` creates a *service*
+ticket, which is a different entity — the surface offers
+`cw_add_project_ticket_note` for project tickets but no create.
 
-{
-  "summary": "Configure Active Directory",
-  "board": {"id": 1},
-  "company": {"id": 12345},
-  "project": {"id": 5000},
-  "phase": {"id": 5001}
-}
-```
+Note also that the pre-change reference showed this as `POST /service/tickets`
+carrying `project` and `phase` references. Whatever that achieved in the vendor
+API, it is not reachable here and should not be treated as an equivalent.
 
 ## Team Member Assignment
 
-```http
-POST /project/projects/{projectId}/teamMembers
-Content-Type: application/json
-
-{
-  "member": {"id": 123},
-  "projectRole": {"id": 1},
-  "startDate": "2024-03-01",
-  "endDate": "2024-06-01",
-  "hoursScheduled": 160
-}
-```
-
-Project team endpoint: `/project/projects/{projectId}/teamMembers`
+**No tool assigns team members.** The assignment shape is documented for
+reading a project's team; changes are made in the PSA.
