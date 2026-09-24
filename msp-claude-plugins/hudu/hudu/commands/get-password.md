@@ -8,12 +8,7 @@ arguments: [name, company, type, show]
 
 Retrieve a password from Hudu. Company is required for security.
 
-## Prerequisites
-
-- Valid Hudu API key configured (`HUDU_API_KEY`)
-- Hudu base URL configured (`HUDU_BASE_URL`)
-- API key must have password access permission enabled
-- Company parameter is required
+The Hudu MCP server must be connected, with password access enabled on its API key. Company is required.
 
 ## Security Notice
 
@@ -24,24 +19,32 @@ When you retrieve a password, the following is recorded:
 - Timestamp of access
 - Action performed (view, update, etc.)
 
-**NEVER include actual password values in summaries, reports, or logs.**
+An operator reviews that log in the Hudu web UI; no tool in this plugin reads it.
+
+**NEVER include actual password values in summaries, reports, or logs.** Both `hudu_list_asset_passwords` and `hudu_get_asset_password` return the plaintext `password` (and `otp_secret`), so every tool result in this command is sensitive, masked output included.
 
 ## Steps
 
 1. **Validate parameters**
    - Ensure company is provided
-   - Resolve company name to ID
+   - Resolve the company name to an id with `hudu_list_companies` (`name`)
    - Validate password search term
 
 2. **Search for password**
-   - Find asset passwords matching name
-   - Apply company and type filters
-   - Return matching passwords
+   - Call `hudu_list_asset_passwords` with `company_id` and `name`
+   - Page through `page` 1, 2, 3… until a page returns fewer items than `page_size` or none; "Found N …" counts one page only
+   - If `type` is given, keep only records whose `password_type` matches (no tool argument filters by type)
 
 3. **Display results**
    - Show password details (name, username, URL)
-   - Mask password by default
-   - Reveal password only with --show flag
+   - Mask password by default, even though the list result already contains the value
+   - Reveal password only with --show flag: for a single match, call `hudu_get_asset_password` with its `id` and show the plaintext `password` it returns
+
+## Tools
+
+1. `hudu_list_companies` — resolve the company to `company_id`
+2. `hudu_list_asset_passwords` — find matching records (`company_id`, `name`, `page`)
+3. `hudu_get_asset_password` — only with `show`, for the single chosen record (`id`)
 
 ## Parameters
 
@@ -227,32 +230,34 @@ Try: /get-password "Domain Admin" --company "Acme Corporation"
 
 ### Access Denied
 
+When `hudu_list_asset_passwords` or `hudu_get_asset_password` returns `Authentication failed - invalid API key` while other Hudu tools work, the key is valid and password access is disabled on it (Hudu answers 401 for a key lacking password permission). Do not report the key as invalid or expired.
+
 ```
 Access denied to passwords
 
-The API key does not have password access permission.
+Credential access is not enabled for this Hudu connection.
 Contact your Hudu administrator to enable password access
-for this API key in Admin > API Keys.
+for the MCP server's API key in Admin > API Keys.
 ```
 
 ### API Error
 
+When every Hudu tool fails (for example `hudu_test_connection` also returns `Authentication failed - invalid API key`, or tools return `Server error: <status>`), the problem is the MCP server's connection, which nothing in this plugin can read or change.
+
 ```
-Error connecting to Hudu API
+Error reaching Hudu
 
-Possible causes:
-  - Invalid API key (check HUDU_API_KEY)
-  - Wrong base URL (check HUDU_BASE_URL)
-  - Network connectivity issue
+The Hudu MCP server's connection is failing.
+Ask the operator who runs the Hudu MCP server to check it.
 
-Retry or check configuration.
+Retry later.
 ```
 
 ## Security Best Practices
 
 1. **Always specify company** - Prevents accidental access to wrong company
 2. **Use specific names** - Avoid overly broad searches
-3. **Review activity logs** - Regularly check password access logs
+3. **Review activity logs** - Regularly check password access logs in the Hudu web UI (no tool here reads them)
 4. **Don't screenshot** - Avoid capturing revealed passwords
 5. **Close after use** - Clear terminal after accessing sensitive data
 6. **Verify need** - Only access passwords when necessary

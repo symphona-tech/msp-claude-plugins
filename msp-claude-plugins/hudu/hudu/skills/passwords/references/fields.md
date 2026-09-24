@@ -8,7 +8,7 @@
 | `company_id` | integer | Yes | Parent company |
 | `name` | string | Yes | Password display name |
 | `username` | string | No | Account username |
-| `password` | string | No | The actual password value |
+| `password` | string | No | The actual password value (returned in plaintext by both `hudu_list_asset_passwords` and `hudu_get_asset_password`) |
 | `url` | string | No | Related URL/login page |
 | `description` | string | No | Additional notes |
 | `password_type` | string | No | Category/type label |

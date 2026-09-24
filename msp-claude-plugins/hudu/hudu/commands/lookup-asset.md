@@ -8,11 +8,7 @@ arguments: [query, company, layout]
 
 Find an asset in Hudu by various identifiers.
 
-## Prerequisites
-
-- Valid Hudu API key configured (`HUDU_API_KEY`)
-- Hudu base URL configured (`HUDU_BASE_URL`)
-- User must have asset read permissions
+The Hudu MCP server must be connected.
 
 ## Steps
 
@@ -22,13 +18,23 @@ Find an asset in Hudu by various identifiers.
    - Map layout filter to asset layout ID
 
 2. **Execute search**
-   - Search assets by name and custom fields
-   - Apply company and layout filters
-   - Fetch related data (company, layout details)
+   - A name uses the `name` filter and a serial number uses `primary_serial` on `hudu_list_assets`
+   - A hostname or IP lives in layout-defined custom fields, which no tool filters on: page through `hudu_list_assets` (narrowed by `company_id` and `asset_layout_id` where given) and match each asset's `fields`
+   - Every list call returns one page (default 25) with no total count; request `page` 1, 2, 3… until a page returns fewer items than `page_size` before reporting a result as complete
+   - Use `hudu_get_asset` for full detail on a match
 
 3. **Format and return results**
    - Display asset details with key information
    - Include quick actions for further operations
+
+## Tools
+
+In call order:
+
+1. `hudu_list_companies` with `name` — resolve the company filter to a `company_id`
+2. `hudu_list_asset_layouts` with `name` — resolve the layout filter to an `asset_layout_id`
+3. `hudu_list_assets` with `company_id`, `asset_layout_id`, and `name` or `primary_serial`, plus `page` — find candidates, paging until a short page
+4. `hudu_get_asset` with `id` — full detail for a single match
 
 ## Parameters
 
@@ -160,7 +166,7 @@ Example searches:
 | Microsoft 365 | M365 tenant details |
 | Backup | Backup configurations |
 
-Note: Asset layout names are custom per Hudu instance. Use `/api/v1/asset_layouts` to see available layouts.
+Note: Asset layout names are custom per Hudu instance. Use `hudu_list_asset_layouts` to see available layouts.
 
 ## Error Handling
 
@@ -188,25 +194,22 @@ Did you mean?
 Try: /lookup-asset "DC-01" --company "Acme Corporation"
 ```
 
-### API Error
+### Tool Error
 
 ```
-Error connecting to Hudu API
+Hudu tool error: Authentication failed - invalid API key
 
-Possible causes:
-  - Invalid API key (check HUDU_API_KEY)
-  - Wrong base URL (check HUDU_BASE_URL)
-  - Network connectivity issue
-
-Retry or check configuration.
+Every Hudu tool is failing, so the Hudu MCP server's API key is the
+problem. Report it to whoever operates the Hudu MCP server; nothing in
+this plugin can read or change the key.
 ```
 
 ### Rate Limited
 
 ```
-Rate limited by Hudu API (300 requests/minute)
+Hudu tool error: Rate limit exceeded and max retries reached
 
-Waiting 60 seconds before retry...
+The server already retried. Wait before retrying.
 ```
 
 ## Related Commands

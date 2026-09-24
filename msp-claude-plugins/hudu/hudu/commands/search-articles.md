@@ -8,23 +8,19 @@ arguments: [query, company, limit]
 
 Search through Hudu knowledge base articles to find relevant documentation.
 
-## Prerequisites
-
-- Valid Hudu API key configured (`HUDU_API_KEY`)
-- Hudu base URL configured (`HUDU_BASE_URL`)
-- User must have article read permissions
+The Hudu MCP server must be connected.
 
 ## Steps
 
 1. **Parse search parameters**
    - Extract search query terms
-   - Resolve company name to ID if provided
+   - Resolve company name to ID if provided (`hudu_list_companies` with `name`)
    - Set result limit
 
 2. **Execute search**
-   - Search articles by name and content
-   - Apply company filter
-   - Paginate through results as needed
+   - Title matches: call `hudu_list_articles` with `name` set to the query and `company_id` if resolved. Server-side matching is by article `name` only; no tool does full-text search.
+   - Content matches: page through `hudu_list_articles` without `name` (`page` 1, 2, 3… until a page returns fewer items than `page_size`) and match the query against each record's HTML `content`, stripping tags first. This reads every article in scope and is expensive — prefer a company filter, and say in the output when the content scan was skipped or stopped early.
+   - Each list call returns one page with no total count; "Found N" from the tool counts that page only, so never report the first page as the full result.
 
 3. **Rank and format results**
    - Sort by relevance (name matches first)
@@ -174,11 +170,13 @@ Example searches:
 
 ## Search Behavior
 
+Hudu matches only the article `name` server-side. Content matching, multi-word AND and exact-phrase matching are done by the agent over the `content` of the articles it has paged through, so they are only as complete as that scan.
+
 | Search Term | Matches |
 |-------------|---------|
-| Single word | Title and content containing word |
-| Multiple words | All words must appear (AND) |
-| "Quoted phrase" | Exact phrase match |
+| Single word | Title (server-side `name` filter) and, if scanned, content containing word |
+| Multiple words | All words must appear (AND), checked by the agent over fetched articles |
+| "Quoted phrase" | Exact phrase match, checked by the agent over fetched articles |
 
 ## Error Handling
 
@@ -216,18 +214,19 @@ Your search returned too many results. Please refine:
   - Use quoted phrases: "backup procedure"
 ```
 
-### API Error
+### Tool Error
 
 ```
-Error connecting to Hudu API
-
-Possible causes:
-  - Invalid API key (check HUDU_API_KEY)
-  - Wrong base URL (check HUDU_BASE_URL)
-  - Network connectivity issue
-
-Retry or check configuration.
+Error searching Hudu articles: <tool error string>
 ```
+
+Report the tool error string as returned. `Authentication failed - invalid API key` on every tool means the Hudu MCP server's key is not accepted; `Rate limit exceeded and max retries reached` means wait before retrying; `Server error: <status>` means the server already retried once. The plugin holds no Hudu credential and has no configuration to check.
+
+## Tools
+
+1. `hudu_list_companies` — resolve the company name to `company_id` (only when a company is given)
+2. `hudu_list_articles` — `name` filter for title matches, then paged without `name` for content matches
+3. `hudu_get_article` — read one result in full when a single article is shown in detail
 
 ## Related Commands
 
