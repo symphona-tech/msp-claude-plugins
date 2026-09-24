@@ -1,41 +1,29 @@
 # Hudu Assets Error Reference
 
-## Common API Errors
+## Failure modes
 
-| Code | Message | Resolution |
-|------|---------|------------|
-| 400 | Name can't be blank | Provide asset name |
-| 400 | Company is required | Include company_id |
-| 400 | Asset layout is required | Include asset_layout_id |
-| 401 | Invalid API key | Check HUDU_API_KEY |
-| 404 | Asset not found | Verify asset ID |
-| 422 | Validation failed | Check required custom fields per layout |
+Errors reach the agent as tool error strings, not HTTP statuses.
+
+| Condition | What the tool returns | Resolution |
+|-----------|-----------------------|------------|
+| Missing `name`, `company_id` or `asset_layout_id`, or a layout-required custom field not supplied | `Validation error` | Supply the required arguments; call `hudu_get_asset_layout` and provide every field with `required: true` |
+| The asset or layout id does not exist, or was deleted | `Resource not found` | Verify the id with `hudu_list_assets` or `hudu_list_asset_layouts` |
+| The server's API key lacks permission for the operation (for example, deletion is disabled for the key) | `Access forbidden - insufficient permissions`, or another tool error | Report that the operation is not enabled for this connection; archive instead only if that is really intended, since archiving is one-way through this plugin |
+| Every tool fails with an authentication error | `Authentication failed - invalid API key` | The server's API key itself is the problem; report it to whoever operates the Hudu MCP server. Nothing in this plugin can read or change the key |
+| Rate limited | `Rate limit exceeded and max retries reached` | The server already retried; wait before retrying |
+| Hudu server error | `Server error: <status>` | The server already retried once; retry later |
 
 ## Validation Errors
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| Name required | Missing name | Add name to request |
-| Company required | No company_id | Include company_id |
-| Layout required | No asset_layout_id | Include asset_layout_id |
-| Invalid layout | Bad asset_layout_id | Query /asset_layouts first |
+| Name required | Missing name | Pass `name` |
+| Company required | No company_id | Pass `company_id` |
+| Layout required | No asset_layout_id | Pass `asset_layout_id` |
+| Invalid layout | Bad asset_layout_id | Call `hudu_list_asset_layouts` first |
 | Required field missing | Layout requires a field | Check layout fields and provide required ones |
 
 ## Error Recovery Pattern
 
-```javascript
-async function safeCreateAsset(data) {
-  try {
-    return await createAsset(data);
-  } catch (error) {
-    if (error.status === 422) {
-      // Check if layout requires fields we didn't provide
-      const layout = await getAssetLayout(data.asset_layout_id);
-      const requiredFields = layout.fields.filter(f => f.required);
-      console.log('Required fields for this layout:', requiredFields.map(f => f.label));
-    }
-
-    throw error;
-  }
-}
-```
+1. If `hudu_create_asset` returns `Validation error`, call `hudu_get_asset_layout` with the `asset_layout_id` you used.
+2. List the entries in `fields` with `required: true`, compare their labels with the `custom_fields` keys you sent, and retry with the missing ones supplied — or ask the user for the missing values.

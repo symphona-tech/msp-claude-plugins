@@ -8,11 +8,7 @@ arguments: [name, status]
 
 Find a company in Hudu by name with optional filters.
 
-## Prerequisites
-
-- Valid Hudu API key configured (`HUDU_API_KEY`)
-- Hudu base URL configured (`HUDU_BASE_URL`)
-- User must have company read permissions
+The Hudu MCP server must be connected.
 
 ## Steps
 
@@ -21,9 +17,10 @@ Find a company in Hudu by name with optional filters.
    - Set status filter
 
 2. **Execute search**
-   - Search companies by name (partial match)
-   - Apply status filter
-   - Fetch related summary data
+   - Search companies by name (partial match) with `hudu_list_companies` and `name`
+   - Apply status filter through the `archived` argument
+   - Page until a page returns fewer items than `page_size`; "Found N" in the tool's message counts one page only
+   - For a single match, fetch related summary data (resource counts, parent and children)
 
 3. **Format and return results**
    - Display company details
@@ -87,7 +84,6 @@ Resources:
 Assets:            42 items
 Passwords:         28 items
 Articles:          12 items
-Websites:          3 items
 
 Parent Company: Acme Holdings (ID: 100)
 
@@ -164,7 +160,7 @@ Assets:            15 items (archived)
 Passwords:         12 items
 Articles:          6 items
 
-WARNING: This company is archived. Data is read-only.
+This company is archived. Restore it with hudu_unarchive_company if needed.
 ================================================================
 ```
 
@@ -175,6 +171,16 @@ WARNING: This company is archived. Data is read-only.
 | active | Currently active companies (default) |
 | archived | Archived/historical companies |
 | all | All companies regardless of status |
+
+## Tools
+
+Called in this order:
+
+1. `hudu_list_companies` — `name` set to the query, `archived: false` for `active`, `archived: true` for `archived`, and one call of each merged for `all`; request `page` 1, 2, 3… until a page returns fewer items than `page_size` or none.
+2. For a single match only: `hudu_list_assets`, `hudu_list_articles` and `hudu_list_asset_passwords`, each with `company_id`, paged to exhaustion and counted. No tool returns a count directly, so a count is the number of records paged. If `hudu_list_asset_passwords` returns `Authentication failed - invalid API key` while the other tools work, the server's API key has password access disabled: show `Passwords: not measured — credential access not enabled`, never a count of zero, and never report the key as invalid.
+3. For a single match only: parent company from `parent_company_id` / `parent_company_name` on the record; child companies by paging `hudu_list_companies` and matching `parent_company_id` to this company's `id`. This pages every company, so skip it when the match list is long.
+
+Website records are not read — the website tools return no data at this server version. The company's own `website` field is shown as recorded.
 
 ## Error Handling
 
@@ -206,17 +212,15 @@ Example:
   /find-company "Acme" --status archived
 ```
 
-### API Error
+### Tool Error
 
 ```
-Error connecting to Hudu API
+Hudu tool call failed: Authentication failed - invalid API key
 
 Possible causes:
-  - Invalid API key (check HUDU_API_KEY)
-  - Wrong base URL (check HUDU_BASE_URL)
-  - Network connectivity issue
-
-Retry or check configuration.
+  - Every tool fails this way: the MCP server's Hudu API key is invalid; report it to whoever operates the server
+  - Only password tools fail this way: the key has password access disabled; counts are shown as not measured
+  - Rate limit exceeded and max retries reached: wait before retrying
 ```
 
 ## Use Cases

@@ -17,24 +17,9 @@
 
 ## Custom Fields (Dynamic)
 
-Custom fields are stored in a `fields` array, where each entry is a key-value pair defined by the asset layout:
+Custom fields are returned on read in a `fields` array, where each entry is a key-value pair defined by the asset layout.
 
-```json
-{
-  "asset": {
-    "name": "DC-01",
-    "asset_layout_id": 5,
-    "company_id": 1,
-    "custom_fields": [
-      { "hostname": "dc-01.acme.local" },
-      { "ip_address": "192.168.1.10" },
-      { "operating_system": "Windows Server 2022" },
-      { "ram_gb": 32 },
-      { "warranty_expiry": "2027-01-15" }
-    ]
-  }
-}
-```
+On write, `hudu_create_asset` and `hudu_update_asset` take `custom_fields` as an object with the layout's field labels as keys. Read the layout with `hudu_get_asset_layout` first to learn the labels and which are required; do not invent keys.
 
 ## Metadata Fields
 

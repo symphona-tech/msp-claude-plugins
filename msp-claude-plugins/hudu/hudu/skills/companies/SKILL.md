@@ -2,9 +2,9 @@
 name: "Hudu Companies"
 description: >
   Hudu companies (clients/organizations): company field reference, parent/child
-  hierarchy, PSA integration matching via id_in_integration, the /api/v1/companies
-  CRUD plus archive/unarchive endpoints, onboarding and offboarding workflows, and
-  how companies scope assets, passwords, articles, and websites.
+  hierarchy, PSA integration matching via id_in_integration, the hudu-mcp company
+  tools (list, get, create, update, archive, unarchive, delete), onboarding and
+  offboarding workflows, and how companies scope assets, passwords, and articles.
 when_to_use: >-
   When looking up, creating, updating, or archiving a company in Hudu, or scoping other
   Hudu records to a client. Use when: hudu
@@ -16,7 +16,7 @@ when_to_use: >-
 
 ## Overview
 
-Companies are the foundational entity in Hudu, representing clients, vendors, or internal entities. All documentation, assets, passwords, articles, and websites are associated with a company. In Hudu, the "Company" label is customizable per instance -- some MSPs rename it to "Organization" or "Client" -- but the API endpoint is always `/api/v1/companies`.
+Companies are the foundational entity in Hudu, representing clients, vendors, or internal entities. All documentation, assets, passwords, articles, and websites are associated with a company. In Hudu, the "Company" label is customizable per instance -- some MSPs rename it to "Organization" or "Client" -- but the tools are always the `hudu_*_company` / `hudu_list_companies` tools below.
 
 ## Anti-triggers
 
@@ -81,6 +81,7 @@ Companies can be matched to PSA records using the `id_in_integration` and `integ
 | `phone_number` | string | No | Phone number |
 | `fax_number` | string | No | Fax number |
 | `website` | string | No | Company website URL |
+| `id_number` | string | No | Free-form company ID number (filterable on `hudu_list_companies`) |
 | `notes` | string | No | Rich text notes |
 
 ### Integration Fields
@@ -89,6 +90,8 @@ Companies can be matched to PSA records using the `id_in_integration` and `integ
 |-------|------|-------------|
 | `id_in_integration` | integer | PSA system company ID |
 | `integration_slug` | string | PSA integration identifier |
+
+Both integration fields are written by Hudu's own PSA integration. They are readable on the returned company record, but no tool sets them and no list tool filters on them.
 
 ### Relationship Fields
 
@@ -106,261 +109,125 @@ Companies can be matched to PSA records using the `id_in_integration` and `integ
 | `slug` | string | URL-friendly identifier |
 | `object_type` | string | Always "Company" |
 
-## API Patterns
+## Tools
+
+Every operation is an MCP tool call. The plugin builds no HTTP requests and holds no Hudu credential.
+
+| Tool | What it does |
+|------|--------------|
+| `hudu_list_companies` | List companies, one page at a time, with optional filters |
+| `hudu_get_company` | Get one company by id |
+| `hudu_create_company` | Create a company |
+| `hudu_update_company` | Update the fields you pass on an existing company |
+| `hudu_archive_company` | Archive a company (reversible) |
+| `hudu_unarchive_company` | Restore an archived company |
+| `hudu_delete_company` | Permanently delete a company and everything scoped to it |
 
 ### List Companies
 
-```http
-GET /api/v1/companies
-x-api-key: YOUR_API_KEY
-Content-Type: application/json
+`hudu_list_companies` takes optional `name`, `city`, `state`, `phone_number`, `website`, `id_number`, `archived`, `page` and `page_size`.
+
+```json
+{ "name": "Acme", "archived": false, "page": 1, "page_size": 25 }
 ```
 
-**With Filters:**
-```http
-GET /api/v1/companies?name=Acme
-GET /api/v1/companies?city=Springfield
-GET /api/v1/companies?state=IL
-GET /api/v1/companies?id_in_integration=12345
-GET /api/v1/companies?search=acme
-```
+The tool returns one page: default `page_size` 25, `page` is 1-indexed, and the result carries no total count — its "Found N" message counts that page only. To enumerate, request `page` 1, 2, 3… until a page returns fewer items than `page_size` or none. Reporting the first page as the whole result is the most plausible wrong answer here.
 
-**With Pagination:**
-```http
-GET /api/v1/companies?page=1
-GET /api/v1/companies?page=2
-```
+There is no free-text `search` argument and no `id_in_integration` filter. To find a company by PSA id, page through `hudu_list_companies` and match `id_in_integration` on the returned records. The same applies to `parent_company_id`: finding a parent's children means paging every company and matching the field.
 
 ### Get Single Company
 
-```http
-GET /api/v1/companies/123
-x-api-key: YOUR_API_KEY
-```
+`hudu_get_company` takes `id` (required).
 
 ### Create Company
 
-```http
-POST /api/v1/companies
-Content-Type: application/json
-x-api-key: YOUR_API_KEY
-```
+`hudu_create_company` takes `name` (required) and optional `nickname`, `company_type`, `address_line_1`, `address_line_2`, `city`, `state`, `zip`, `country_name`, `phone_number`, `fax_number`, `website`, `id_number`, `notes` and `parent_company_id`.
 
 ```json
 {
-  "company": {
-    "name": "New Client Corporation",
-    "nickname": "NCC",
-    "company_type": "Customer",
-    "address_line_1": "123 Main Street",
-    "city": "Portland",
-    "state": "OR",
-    "zip": "97201",
-    "phone_number": "555-123-4567",
-    "website": "https://newclient.com",
-    "notes": "Onboarded February 2026. Primary contact: John Smith."
-  }
+  "name": "New Client Corporation",
+  "nickname": "NCC",
+  "company_type": "Customer",
+  "address_line_1": "123 Main Street",
+  "city": "Portland",
+  "state": "OR",
+  "zip": "97201",
+  "phone_number": "555-123-4567",
+  "website": "https://newclient.com",
+  "notes": "Onboarded February 2026. Primary contact: John Smith."
 }
 ```
 
 ### Update Company
 
-```http
-PUT /api/v1/companies/123
-Content-Type: application/json
-x-api-key: YOUR_API_KEY
-```
+`hudu_update_company` takes `id` (required) and the same optional fields as create. Only the fields you pass are sent.
 
 ```json
 {
-  "company": {
-    "nickname": "NCC-UPDATED",
-    "notes": "Updated: New primary contact is Jane Doe (555-987-6543)."
-  }
+  "id": 123,
+  "nickname": "NCC-UPDATED",
+  "notes": "Updated: New primary contact is Jane Doe (555-987-6543)."
 }
 ```
 
 ### Delete Company
 
-```http
-DELETE /api/v1/companies/123
-x-api-key: YOUR_API_KEY
-```
+`hudu_delete_company` takes `id` (required).
 
-**Warning:** Deleting a company removes all associated resources (assets, passwords, articles, etc.). Requires DELETE permission on the API key.
+**Warning:** Deletion is irreversible. Deleting a company deletes its assets, articles and passwords with it. Deletion is a per-API-key permission in Hudu; if it is disabled on the server's key, the tool returns an error rather than deleting.
 
 ### Archive / Unarchive Company
 
-```http
-PUT /api/v1/companies/123/archive
-x-api-key: YOUR_API_KEY
-```
-
-```http
-PUT /api/v1/companies/123/unarchive
-x-api-key: YOUR_API_KEY
-```
-
-### Search by PSA Integration ID
-
-```http
-GET /api/v1/companies?id_in_integration=12345
-```
+`hudu_archive_company` and `hudu_unarchive_company` each take `id` (required). Company archiving is reversible: `hudu_unarchive_company` restores the company. This is the only unarchive tool — archived assets and articles have no tool to restore them.
 
 ## Common Workflows
 
 ### New Client Onboarding
 
-1. **Create company** with basic info (name, address, phone, website)
-2. **Set integration ID** to link with PSA
-3. **Add notes** for quick reference (primary contact, contract info)
+1. **Create company** with basic info (name, address, phone, website) using `hudu_create_company`
+2. **Link to PSA** — the `id_in_integration` link is set by Hudu's PSA integration when it syncs the company; no tool here sets it
+3. **Add notes** for quick reference (primary contact, contract info) in the `notes` argument
 4. **Create initial assets** (servers, workstations, network devices)
 5. **Document passwords** for the company
 6. **Create articles** (network overview, procedures)
-7. **Add website records** for monitoring
-
-```javascript
-async function onboardClient(clientData) {
-  // Step 1: Create company
-  const company = await createCompany({
-    name: clientData.companyName,
-    nickname: clientData.nickname,
-    company_type: 'Customer',
-    address_line_1: clientData.address,
-    city: clientData.city,
-    state: clientData.state,
-    zip: clientData.zip,
-    phone_number: clientData.phone,
-    website: clientData.website,
-    notes: `Onboarded: ${new Date().toLocaleDateString()}\nPrimary contact: ${clientData.primaryContact}`
-  });
-
-  // Step 2: Link to PSA
-  if (clientData.psaId) {
-    await updateCompany(company.id, {
-      id_in_integration: clientData.psaId
-    });
-  }
-
-  return company;
-}
-```
 
 ### Client Offboarding
 
-1. **Review and export** critical documentation if needed
-2. **Archive passwords** (do not delete for audit purposes)
-3. **Archive the company** instead of deleting
-4. **Add offboarding notes** with date and reason
-
-```javascript
-async function offboardClient(companyId, reason) {
-  // Add offboarding notes
-  await updateCompany(companyId, {
-    notes: `ARCHIVED: ${new Date().toLocaleDateString()} - ${reason}`
-  });
-
-  // Archive the company
-  await archiveCompany(companyId);
-}
-```
+1. **Review** critical documentation with the read tools; exporting it is a Hudu web UI action
+2. **Leave password records in place** (do not delete for audit purposes); no tool archives a password
+3. **Add offboarding notes** with date and reason: `hudu_update_company` with `id` and `notes`
+4. **Archive the company** instead of deleting: `hudu_archive_company` with `id`. It can be restored later with `hudu_unarchive_company`
 
 ### PSA Sync Verification
 
-```javascript
-async function verifyPsaSync() {
-  const companies = await fetchAllCompanies();
-
-  const syncStatus = {
-    synced: [],
-    unsynced: [],
-    mismatched: []
-  };
-
-  for (const company of companies) {
-    if (!company.id_in_integration) {
-      syncStatus.unsynced.push(company);
-    } else {
-      const psaCompany = await lookupPsaCompany(company.id_in_integration);
-      if (psaCompany) {
-        syncStatus.synced.push(company);
-      } else {
-        syncStatus.mismatched.push(company);
-      }
-    }
-  }
-
-  return syncStatus;
-}
-```
+1. Page through `hudu_list_companies` until a page returns fewer than `page_size` items.
+2. Split the companies into those with `id_in_integration` set and those without.
+3. Checking that each linked id still exists in the PSA is done with that PSA's own plugin; this plugin reads only Hudu.
 
 ### Bulk Company Report
 
-```javascript
-async function generateCompanyReport() {
-  const companies = await fetchAllCompanies();
+Page through `hudu_list_companies` to exhaustion and report, per company: `name`, `nickname`, `city`, `state`, whether `id_in_integration` is set, whether `website` is set, `created_at` and `updated_at`.
 
-  return companies.map(company => ({
-    name: company.name,
-    nickname: company.nickname,
-    city: company.city,
-    state: company.state,
-    psaSynced: !!company.id_in_integration,
-    hasWebsite: !!company.website,
-    createdAt: company.created_at,
-    updatedAt: company.updated_at
-  }));
-}
-```
+## Failure modes
 
-## Error Handling
+Errors reach the agent as a tool error string, not an HTTP status.
 
-### Common API Errors
-
-| Code | Message | Resolution |
-|------|---------|------------|
-| 400 | Name can't be blank | Provide company name |
-| 400 | Name has already been taken | Use unique name |
-| 401 | Invalid API key | Check HUDU_API_KEY |
-| 404 | Company not found | Verify company ID and HUDU_BASE_URL |
-| 422 | Validation failed | Check required fields |
-
-### Validation Errors
-
-| Error | Cause | Fix |
-|-------|-------|-----|
-| Name required | Missing name field | Add name to request body |
-| Name not unique | Duplicate company name | Use a different name |
-| Invalid parent ID | Non-existent parent company | Verify parent_company_id |
-
-### Error Recovery Pattern
-
-```javascript
-async function safeCreateCompany(data) {
-  try {
-    return await createCompany(data);
-  } catch (error) {
-    if (error.status === 422 && error.message?.includes('already been taken')) {
-      // Company exists - find and return it
-      const existing = await findCompanyByName(data.name);
-      return existing;
-    }
-
-    if (error.status === 401) {
-      throw new Error('API key invalid or expired. Check HUDU_API_KEY.');
-    }
-
-    throw error;
-  }
-}
-```
+| Condition | What the tool returns | Resolution |
+|-----------|-----------------------|------------|
+| `name` missing, duplicate name, or invalid value | `Validation error` | Provide a unique `name`; on a duplicate, find the existing company with `hudu_list_companies` and `name` |
+| `parent_company_id` does not exist | `Validation error` | Verify the parent with `hudu_get_company` |
+| Company id does not exist or was deleted | `Resource not found` | Re-find the company with `hudu_list_companies` |
+| Deletion disabled on the server's API key, or other permission gap | `Access forbidden - insufficient permissions` or another tool error | Archive instead, or ask a Hudu administrator |
+| Every tool fails authentication | `Authentication failed - invalid API key` | The MCP server's key is the problem; report it to whoever operates the server |
+| Too many requests | `Rate limit exceeded and max retries reached` | The server already retried; wait before retrying |
+| Hudu server fault | `Server error: <status>` | The server already retried once; retry later |
 
 ## Best Practices
 
 1. **Use descriptive names** - Include location or identifier if needed for uniqueness
 2. **Set nicknames** - Short abbreviations for quick reference
 3. **Maintain notes** - Keep emergency contact info and contract details readily available
-4. **Link to PSA** - Always set `id_in_integration` for cross-platform lookups
+4. **Link to PSA** - Enable Hudu's PSA integration so `id_in_integration` is set for cross-platform lookups
 5. **Use parent/child** - Organize multi-location or division clients
 6. **Archive, don't delete** - Preserve historical documentation
 7. **Include address info** - Useful for dispatch and site visit planning
@@ -371,5 +238,3 @@ async function safeCreateCompany(data) {
 - [Hudu Assets](../assets/SKILL.md) - Asset management for companies
 - [Hudu Articles](../articles/SKILL.md) - Knowledge base articles
 - [Hudu Passwords](../passwords/SKILL.md) - Credential storage
-- [Hudu Websites](../websites/SKILL.md) - Website monitoring
-- [Hudu API Patterns](../api-patterns/SKILL.md) - API reference

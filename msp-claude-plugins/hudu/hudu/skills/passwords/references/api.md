@@ -1,118 +1,93 @@
-# Hudu Asset Passwords API Reference
+# Hudu Asset Passwords Tool Reference
+
+Every operation is an MCP tool call. The plugin builds no HTTP requests and holds no Hudu credential.
+
+## Tools
+
+| Tool | What it does |
+|------|--------------|
+| `hudu_list_asset_passwords` | List password records, one page per call |
+| `hudu_get_asset_password` | Read one password record by id |
+| `hudu_create_asset_password` | Create a password record |
+| `hudu_update_asset_password` | Change fields on an existing password record |
+| `hudu_delete_asset_password` | Delete a password record (irreversible) |
 
 ## List Passwords
 
-```http
-GET /api/v1/asset_passwords
-x-api-key: YOUR_API_KEY
-Content-Type: application/json
+`hudu_list_asset_passwords` takes optional `company_id`, `name`, `search`, `page` and `page_size`.
+
+```json
+{ "company_id": 123, "name": "admin", "page": 1 }
 ```
 
-**By Company:**
-```http
-GET /api/v1/asset_passwords?company_id=123
-```
+It returns full records, including the plaintext `password` and `otp_secret`, so list output is as sensitive as get output.
 
-**By Name:**
-```http
-GET /api/v1/asset_passwords?name=Domain Admin
-```
+### Paging
 
-**With Pagination:**
-```http
-GET /api/v1/asset_passwords?company_id=123&page=1
-```
-
-**Combined:**
-```http
-GET /api/v1/asset_passwords?company_id=123&name=admin
-GET /api/v1/asset_passwords?company_id=123&name=firewall
-```
+Each call returns one page: default `page_size` 25, `page` is 1-indexed, and the result carries no total count. The tool's "Found N …" message counts that page only. To enumerate, request `page` 1, 2, 3… until a page returns fewer items than `page_size`, or none. Reporting the first page as the whole result is the most plausible wrong answer here.
 
 ## Get Single Password
 
-```http
-GET /api/v1/asset_passwords/789
-x-api-key: YOUR_API_KEY
-```
+`hudu_get_asset_password` takes `id`.
 
-**Response:**
+Abridged returned record:
+
 ```json
 {
-  "asset_password": {
-    "id": 789,
-    "company_id": 123,
-    "company_name": "Acme Corporation",
-    "name": "Domain Admin - ACME",
-    "username": "administrator@acme.local",
-    "password": "SecureP@ssw0rd123!",
-    "url": "https://dc01.acme.local",
-    "description": "Primary domain administrator account.\nUse for:\n- Domain controller management\n- Group Policy changes\n- AD user management",
-    "password_type": "Administrative",
-    "password_folder_id": 45,
-    "password_folder_name": "Infrastructure",
-    "otp_secret": null,
-    "slug": "domain-admin-acme",
-    "created_at": "2024-01-15T10:30:00.000Z",
-    "updated_at": "2025-11-15T14:22:00.000Z",
-    "url": "https://your-company.huducloud.com/passwords/789"
-  }
+  "id": 789,
+  "company_id": 123,
+  "company_name": "Acme Corporation",
+  "name": "Domain Admin - ACME",
+  "username": "administrator@acme.local",
+  "password": "<plaintext value>",
+  "url": "https://dc01.acme.local",
+  "description": "Primary domain administrator account.",
+  "password_type": "Administrative",
+  "password_folder_id": 45,
+  "password_folder_name": "Infrastructure",
+  "otp_secret": null,
+  "created_at": "2024-01-15T10:30:00.000Z",
+  "updated_at": "2025-11-15T14:22:00.000Z"
 }
 ```
 
-The password value is returned in plaintext in this response. See the output-safety rules in SKILL.md.
+The password value is returned in plaintext. See the output-safety rules in SKILL.md.
 
 ## Create Password
 
-```http
-POST /api/v1/asset_passwords
-Content-Type: application/json
-x-api-key: YOUR_API_KEY
-```
+`hudu_create_asset_password` takes `company_id` and `name`, and optional `username`, `password`, `url`, `description`, `password_type`, `otp_secret`, `password_folder_id`, `passwordable_type`, `passwordable_id` and `in_portal`.
 
 ```json
 {
-  "asset_password": {
-    "company_id": 123,
-    "name": "Domain Admin - ACME",
-    "username": "administrator@acme.local",
-    "password": "SecureP@ssw0rd123!",
-    "url": "https://dc01.acme.local",
-    "description": "Primary domain administrator account",
-    "password_type": "Administrative",
-    "password_folder_id": 45
-  }
+  "company_id": 123,
+  "name": "Domain Admin - ACME",
+  "username": "administrator@acme.local",
+  "password": "<value>",
+  "url": "https://dc01.acme.local",
+  "description": "Primary domain administrator account",
+  "password_type": "Administrative",
+  "password_folder_id": 45
 }
 ```
 
+No tool lists or creates password folders; take a `password_folder_id` from an existing record, or omit it.
+
 ## Update Password
 
-```http
-PUT /api/v1/asset_passwords/789
-Content-Type: application/json
-x-api-key: YOUR_API_KEY
-```
+`hudu_update_asset_password` takes `id`, and optional `name`, `username`, `password`, `url`, `description`, `password_type` and `otp_secret`. It sends only the fields given. It cannot change `company_id`, `password_folder_id`, `passwordable_type`, `passwordable_id` or `in_portal`.
 
 ```json
 {
-  "asset_password": {
-    "password": "NewSecureP@ssw0rd456!",
-    "description": "Password rotated on 2026-02-15. Previous rotation: 2025-11-15."
-  }
+  "id": 789,
+  "password": "<new value>",
+  "description": "Password rotated on 2026-02-15. Previous rotation: 2025-11-15."
 }
 ```
 
 ## Delete Password
 
-```http
-DELETE /api/v1/asset_passwords/789
-x-api-key: YOUR_API_KEY
-```
-
-Deletion requires DELETE permission on the API key. Prefer keeping passwords for audit purposes.
+`hudu_delete_asset_password` takes `id`. Deletion is irreversible, and fails if deletion is disabled on the server's API key. Prefer keeping passwords for audit purposes.
 
 ## Audit Logging
 
-```http
-GET /api/v1/activity_logs?resource_type=AssetPassword&resource_id=789
-```
+Hudu records password access in its activity log, which an operator reviews in the Hudu web UI. No tool in this plugin reads it.

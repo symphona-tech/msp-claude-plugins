@@ -151,13 +151,8 @@ self-approve deletes** — with two Hudu-specific tightenings.
 ## What it cannot reach
 
 - Only the Hudu instance and the companies the operator's gateway identity
-  maps to. Hudu API keys can additionally be scoped per company and
-  IP-whitelisted at the Hudu end; the gateway does not widen that.
-- **Password access is a separate per-API-key toggle in Hudu.** If the key
-  behind the gateway connection has password access disabled, every
-  password tool returns 403 while everything else works. That is a
-  deliberate configuration, not a broken connection — and it is the
-  cheapest way to take credential exposure off the table entirely.
+  maps to. A Hudu API key cannot itself be scoped to a subset of companies or restricted by source IP; its permission toggles — password access and deletion — are the whole of what the key can restrict.
+- **Password access is a separate per-API-key toggle in Hudu.** If the key behind the connection has password access disabled, every password tool fails while everything else works — and Hudu reports it as HTTP 401 `Bad credentials`, which the MCP server surfaces as `Authentication failed - invalid API key`. That is a deliberate configuration, not a broken connection — and it is the cheapest way to take credential exposure off the table entirely.
 - No filesystem, no shell, no other vendor's data.
 - No user, group, or API-key administration. Hudu's own admin surface is
   not exposed here.
@@ -193,9 +188,7 @@ persisted by this plugin, but what they contain matters:
 - **The API name is `asset_passwords`, not `passwords`.** The Hudu UI says
   "Passwords". An agent that reasons from the UI label will construct a
   path that does not exist.
-- **403 on a password tool is a key-permission problem, not a bad key.**
-  The same connection works everywhere else. Do not let an agent
-  "diagnose" this as an expired credential and prompt for a rotation.
+- **`Authentication failed - invalid API key` on a password tool is a key-permission problem, not a bad key.** Hudu answers a password request from a key without password access with 401 `Bad credentials` rather than 403, and the server maps every 401 to that message, so the error states the wrong cause. If the same connection works for every non-password tool, the key is valid and password access is disabled on it. Do not let an agent "diagnose" this as an expired or invalid credential and prompt for a rotation.
 - **Delete is unrecoverable and there is no trash.** Prefer archiving —
   but see above: archive is one-way for assets and articles through this
   integration.
