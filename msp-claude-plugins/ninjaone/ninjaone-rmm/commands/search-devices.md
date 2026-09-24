@@ -22,11 +22,13 @@ Search for devices in NinjaOne matching the query "$ARGUMENTS.query".
    - IP Address
    - Last contact time
 
-## API Endpoints
+## Tools
 
-- List organizations: `GET /api/v2/organizations`
-- List devices by org: Filter devices by organizationId
-- Get device: `GET /api/v2/device/{id}`
+- `ninjaone_devices_list` — the primary call. Filter by `organization_id`, `device_class` or `online`, and page by `cursor` until no cursor comes back.
+- `ninjaone_organizations_list` — resolve a client name to an `organization_id` first when the query names one.
+- `ninjaone_devices_get` — full detail for one device once it has been located.
+
+**Page to exhaustion.** `ninjaone_devices_list` returns one page at a time; reporting the first page as the whole result is how a search comes back plausibly short.
 
 ## Example Output
 
